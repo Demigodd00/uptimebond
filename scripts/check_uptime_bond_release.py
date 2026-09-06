@@ -260,6 +260,7 @@ def main() -> int:
                 str(DEPLOY_SCRIPT_PATH),
                 str(ACCEPTANCE_SCRIPT_PATH),
                 str(INTEGRATION_TEST_PATH),
+                str(ROOT / "scripts" / "cache_genvm_runners.py"),
                 str(Path(__file__)),
             ],
         ),

@@ -56,8 +56,14 @@ Python 3.12+, Node.js 22, pnpm 11.19.0, and the pinned packages in `requirements
 
 ```bash
 python -m pip install -r requirements-deploy.txt
+python scripts/cache_genvm_runners.py
 python scripts/check_uptime_bond_release.py
 ```
+
+The cache helper verifies the fixed SHA-256 digest of GenVM's official
+`v0.3.0-rc7` runner bundle before direct tests use it. It only bridges the
+upstream asset rename in `genlayer-test==0.29.2`; it does not alter the
+contract, runner pin, or test outcomes.
 
 The frontend can also be checked independently:
 
