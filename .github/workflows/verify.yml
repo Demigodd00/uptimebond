@@ -1,0 +1,43 @@
+name: Verify UptimeBond
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: genvm-lint check contracts/uptime_bond.py
+      - run: python -m pytest tests/direct/test_uptime_bond.py -q
+      - run: python -m py_compile scripts/deploy_uptime_bond.py scripts/uptimebond_acceptance.py tests/integration/test_uptime_bond_studionet.py scripts/check_uptime_bond_release.py
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/uptimebond-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/uptimebond-web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm audit:prod

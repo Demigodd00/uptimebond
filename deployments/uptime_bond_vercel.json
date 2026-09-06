@@ -1,0 +1,21 @@
+{
+  "product": "UptimeBond",
+  "network": "StudioNet",
+  "production_url": "https://uptimebond-psi.vercel.app",
+  "deployment_url": "https://uptimebond-dqvvumy4q-demi17.vercel.app",
+  "deployment_id": "dpl_2pbzUsnnBL7aZGFDUGuRUFt19EKA",
+  "project_id": "prj_ePCYwL2TBmKlKGMW8kdkih0N8HFM",
+  "root_directory": "apps/uptimebond-web",
+  "contract_address": "0x308966Eb38b57798e614E3f4B4D4011C6F84367a",
+  "ready_state": "READY",
+  "target": "production",
+  "node_runtime": "22.x",
+  "application_output_digest": "25542bb147c32a12cc8d135011522b4708c55acabeb2314585722316bcad423f",
+  "route_output_digest": "b5697dc51d459d83a02f9a5e64c968cccf598ab36322d0309949483d78aa878b",
+  "health_verified": true,
+  "security_headers_verified": true,
+  "fixture_status": 200,
+  "fixture_bytes": 91,
+  "fixture_sha256": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
+  "deployed_at": "2026-09-06T17:44:45.6050000Z"
+}

@@ -1,0 +1,620 @@
+{
+  "network": "studionet",
+  "contract": "0x308966Eb38b57798e614E3f4B4D4011C6F84367a",
+  "source_sha256": "d79ea8561dc7da6a1f2a28906a59b01d7b5022aa3bccb321454884c658753481",
+  "started_at": "2026-09-06T17:15:00.251191+00:00",
+  "transactions": {
+    "create-cancellation": {
+      "method": "create_bond",
+      "args": [
+        "UptimeBond cancellation acceptance d79ea8561d",
+        "https://uptimebond-psi.vercel.app/api/demo-health",
+        "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+        200,
+        "uptimebond-demo-v1",
+        1788715204,
+        1788715324,
+        120,
+        2,
+        2,
+        0
+      ],
+      "role": "provider",
+      "sender": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+      "value_atto": "1000000000000000",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:15:04.901953+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0x393743b1bedfeb0833b7dcb4e562d7261be729d5963d4ce60c242d360a10d997",
+      "transaction_hash": "0x393743b1bedfeb0833b7dcb4e562d7261be729d5963d4ce60c242d360a10d997",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:15:49.251587+00:00",
+      "checked": true
+    },
+    "reject-observer-cancel": {
+      "method": "cancel_offer",
+      "args": [
+        "ub-1"
+      ],
+      "role": "observer",
+      "sender": "0x88b769C4177e3BF32d9C0F782f775a3f7B1B54e0",
+      "value_atto": "0",
+      "expected_error": "only the provider can cancel",
+      "started_at": "2026-09-06T17:15:52.517392+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0xa1d7a7d071ee4f4caeef2ad29a04d457ead3d127bb0b72f0afa9ef7b6f58807f",
+      "transaction_hash": "0xa1d7a7d071ee4f4caeef2ad29a04d457ead3d127bb0b72f0afa9ef7b6f58807f",
+      "status": "FINALIZED",
+      "execution_succeeded": false,
+      "leader_execution_result": "ERROR",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:16:36.721603+00:00",
+      "checked": true
+    },
+    "cancel-offer": {
+      "method": "cancel_offer",
+      "args": [
+        "ub-1"
+      ],
+      "role": "provider",
+      "sender": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+      "value_atto": "0",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:16:36.738063+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0xaccb370e27a2fdec8f56109dd2d57ecb0b7dd6ab7f27c7ad887636f71b595b66",
+      "transaction_hash": "0xaccb370e27a2fdec8f56109dd2d57ecb0b7dd6ab7f27c7ad887636f71b595b66",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [
+        "0xfa9af14b585cb071d56733e5f1d20602bbe8eecc6c553a622e47c8afe736e317"
+      ],
+      "finished_at": "2026-09-06T17:17:22.031859+00:00",
+      "checked": true
+    },
+    "create-lifecycle": {
+      "method": "create_bond",
+      "args": [
+        "UptimeBond monitored acceptance d79ea8561d",
+        "https://uptimebond-psi.vercel.app/api/demo-health",
+        "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+        200,
+        "uptimebond-demo-v1",
+        1788715408,
+        1788715528,
+        120,
+        2,
+        2,
+        0
+      ],
+      "role": "provider",
+      "sender": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+      "value_atto": "1000000000000000",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:17:28.782114+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0x696190a744521d5fc9e2c1bc48e3665ed345d187c4fc9441bc197213de981509",
+      "transaction_hash": "0x696190a744521d5fc9e2c1bc48e3665ed345d187c4fc9441bc197213de981509",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:18:14.011431+00:00",
+      "checked": true
+    },
+    "reject-observer-readiness": {
+      "method": "verify_readiness",
+      "args": [
+        "ub-2"
+      ],
+      "role": "observer",
+      "sender": "0x88b769C4177e3BF32d9C0F782f775a3f7B1B54e0",
+      "value_atto": "0",
+      "expected_error": "only the provider can verify readiness",
+      "started_at": "2026-09-06T17:18:17.286066+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0x24ff9ce84f77d8de2cf4678584773a786fa00b71cd22489b9cb2c1f56dff92ec",
+      "transaction_hash": "0x24ff9ce84f77d8de2cf4678584773a786fa00b71cd22489b9cb2c1f56dff92ec",
+      "status": "FINALIZED",
+      "execution_succeeded": false,
+      "leader_execution_result": "ERROR",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:19:01.599233+00:00",
+      "checked": true
+    },
+    "verify-readiness": {
+      "method": "verify_readiness",
+      "args": [
+        "ub-2"
+      ],
+      "role": "provider",
+      "sender": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+      "value_atto": "0",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:19:01.625050+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0xa0678072c202a17296a69b3c2ed1296f171f6c41ba1aa0177d0445b1c3967182",
+      "transaction_hash": "0xa0678072c202a17296a69b3c2ed1296f171f6c41ba1aa0177d0445b1c3967182",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:19:52.091770+00:00",
+      "checked": true
+    },
+    "reject-provider-accept": {
+      "method": "accept_bond",
+      "args": [
+        "ub-2"
+      ],
+      "role": "provider",
+      "sender": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+      "value_atto": "0",
+      "expected_error": "only the beneficiary can accept",
+      "started_at": "2026-09-06T17:19:55.381570+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0x5ec60cc5cbd70ece0b2035104fcb948ee4ccd2b88f12467433256f4a6945b2fa",
+      "transaction_hash": "0x5ec60cc5cbd70ece0b2035104fcb948ee4ccd2b88f12467433256f4a6945b2fa",
+      "status": "FINALIZED",
+      "execution_succeeded": false,
+      "leader_execution_result": "ERROR",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:20:39.711525+00:00",
+      "checked": true
+    },
+    "accept-bond": {
+      "method": "accept_bond",
+      "args": [
+        "ub-2"
+      ],
+      "role": "beneficiary",
+      "sender": "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+      "value_atto": "0",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:20:39.736116+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0xbda7ed1ce0ba76850c6e7590088f4863bf0a3c8a5fa939e26599ab829b5c0ed4",
+      "transaction_hash": "0xbda7ed1ce0ba76850c6e7590088f4863bf0a3c8a5fa939e26599ab829b5c0ed4",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:21:25.019159+00:00",
+      "checked": true
+    },
+    "reject-early-observation": {
+      "method": "record_observation",
+      "args": [
+        "ub-2"
+      ],
+      "role": "observer",
+      "sender": "0x88b769C4177e3BF32d9C0F782f775a3f7B1B54e0",
+      "value_atto": "0",
+      "expected_error": "monitoring has not started",
+      "started_at": "2026-09-06T17:21:28.268932+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0x03d18b7eb09cc009f856061f4518ba436ba6acd2d2c886d0ac1b22ad9c0ea3bf",
+      "transaction_hash": "0x03d18b7eb09cc009f856061f4518ba436ba6acd2d2c886d0ac1b22ad9c0ea3bf",
+      "status": "FINALIZED",
+      "execution_succeeded": false,
+      "leader_execution_result": "ERROR",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:22:12.501141+00:00",
+      "checked": true
+    },
+    "record-slot-0": {
+      "method": "record_observation",
+      "args": [
+        "ub-2"
+      ],
+      "role": "observer",
+      "sender": "0x88b769C4177e3BF32d9C0F782f775a3f7B1B54e0",
+      "value_atto": "0",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:25:31.000813+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0x1f3b4bac2c64bfb2a964864450473fae5ec2d93230532114244c71cba7b9625f",
+      "transaction_hash": "0x1f3b4bac2c64bfb2a964864450473fae5ec2d93230532114244c71cba7b9625f",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:26:19.787518+00:00",
+      "checked": true
+    },
+    "record-slot-1": {
+      "method": "record_observation",
+      "args": [
+        "ub-2"
+      ],
+      "role": "beneficiary",
+      "sender": "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+      "value_atto": "0",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:27:31.003997+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0x7a926481972b9bf8c84f2ee59c1956c207efa65ebd727f40f31d81661d77ad53",
+      "transaction_hash": "0x7a926481972b9bf8c84f2ee59c1956c207efa65ebd727f40f31d81661d77ad53",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [],
+      "finished_at": "2026-09-06T17:28:16.573586+00:00",
+      "checked": true
+    },
+    "finalize-bond": {
+      "method": "finalize_bond",
+      "args": [
+        "ub-2"
+      ],
+      "role": "observer",
+      "sender": "0x88b769C4177e3BF32d9C0F782f775a3f7B1B54e0",
+      "value_atto": "0",
+      "expected_error": null,
+      "started_at": "2026-09-06T17:29:31.000288+00:00",
+      "broadcast_attempted": true,
+      "evm_transaction_hash": "0xf5ec92b2b2b5e2f1cde12170ba7874d84d2f6615d3f6543016fbc190891935bb",
+      "transaction_hash": "0xf5ec92b2b2b5e2f1cde12170ba7874d84d2f6615d3f6543016fbc190891935bb",
+      "status": "FINALIZED",
+      "execution_succeeded": true,
+      "leader_execution_result": "SUCCESS",
+      "triggered_transactions": [
+        "0x6d2105c1e3352b7147a9fab4c60fe5d63df959941e5cb110a2ebef0287ad1191"
+      ],
+      "finished_at": "2026-09-06T17:30:14.589499+00:00",
+      "checked": true
+    }
+  },
+  "assertions": {
+    "cancellation-refunded": {
+      "checked_at": "2026-09-06T17:17:25.272918+00:00",
+      "expected": {
+        "status": "CANCELLED",
+        "result": "PROVIDER_CANCELLED",
+        "payout_recipient": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "payout_atto": "1000000000000000"
+      },
+      "observed": {
+        "accept_by_unix": "1788715204",
+        "accepted_at_iso": "",
+        "accepted_at_unix": "0",
+        "beneficiary": "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+        "bond_atto": "1000000000000000",
+        "can_expire": false,
+        "can_finalize": false,
+        "can_observe": false,
+        "cancellation_requested": false,
+        "cancellation_requested_by": "",
+        "created_at_iso": "2026-09-06T17:15:13+00:00",
+        "created_at_unix": "1788714913",
+        "current_slot": "-1",
+        "current_slot_recorded": false,
+        "endpoint_url": "https://uptimebond-psi.vercel.app/api/demo-health",
+        "ends_at_unix": "1788715564",
+        "expected_status": "200",
+        "failed_count": "0",
+        "id": "ub-1",
+        "interval_secs": "120",
+        "max_failures": "0",
+        "min_observations": "2",
+        "observed_count": "0",
+        "passed_count": "0",
+        "payout_atto": "1000000000000000",
+        "payout_recipient": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "proof_token": "uptimebond-demo-v1",
+        "provider": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "readiness": {
+          "body_bytes": "0",
+          "body_digest": "",
+          "checked_at_iso": "",
+          "checked_at_unix": "0",
+          "exists": false,
+          "http_status": "0",
+          "provenance": "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
+        },
+        "result": "PROVIDER_CANCELLED",
+        "service_name": "UptimeBond cancellation acceptance d79ea8561d",
+        "settled_at_iso": "2026-09-06T17:16:45+00:00",
+        "settled_at_unix": "1788715005",
+        "slot_count": "2",
+        "starts_at_unix": "1788715324",
+        "status": "CANCELLED",
+        "uptime_bps": "0"
+      }
+    },
+    "readiness-proven": {
+      "checked_at": "2026-09-06T17:19:55.367650+00:00",
+      "expected": {
+        "status": "READY"
+      },
+      "observed": {
+        "accept_by_unix": "1788715408",
+        "accepted_at_iso": "",
+        "accepted_at_unix": "0",
+        "beneficiary": "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+        "bond_atto": "1000000000000000",
+        "can_expire": false,
+        "can_finalize": false,
+        "can_observe": false,
+        "cancellation_requested": false,
+        "cancellation_requested_by": "",
+        "created_at_iso": "2026-09-06T17:17:38+00:00",
+        "created_at_unix": "1788715058",
+        "current_slot": "-1",
+        "current_slot_recorded": false,
+        "endpoint_url": "https://uptimebond-psi.vercel.app/api/demo-health",
+        "ends_at_unix": "1788715768",
+        "expected_status": "200",
+        "failed_count": "0",
+        "id": "ub-2",
+        "interval_secs": "120",
+        "max_failures": "0",
+        "min_observations": "2",
+        "observed_count": "0",
+        "passed_count": "0",
+        "payout_atto": "0",
+        "payout_recipient": "",
+        "proof_token": "uptimebond-demo-v1",
+        "provider": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "readiness": {
+          "body_bytes": "91",
+          "body_digest": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
+          "checked_at_iso": "2026-09-06T17:19:10+00:00",
+          "checked_at_unix": "1788715150",
+          "exists": true,
+          "http_status": "200",
+          "provenance": "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
+        },
+        "result": "",
+        "service_name": "UptimeBond monitored acceptance d79ea8561d",
+        "settled_at_iso": "",
+        "settled_at_unix": "0",
+        "slot_count": "2",
+        "starts_at_unix": "1788715528",
+        "status": "READY",
+        "uptime_bps": "0"
+      }
+    },
+    "lifecycle-active": {
+      "checked_at": "2026-09-06T17:21:28.252644+00:00",
+      "expected": {
+        "status": "ACTIVE",
+        "payout_recipient": "",
+        "payout_atto": "0"
+      },
+      "observed": {
+        "accept_by_unix": "1788715408",
+        "accepted_at_iso": "2026-09-06T17:20:48+00:00",
+        "accepted_at_unix": "1788715248",
+        "beneficiary": "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+        "bond_atto": "1000000000000000",
+        "can_expire": false,
+        "can_finalize": false,
+        "can_observe": false,
+        "cancellation_requested": false,
+        "cancellation_requested_by": "",
+        "created_at_iso": "2026-09-06T17:17:38+00:00",
+        "created_at_unix": "1788715058",
+        "current_slot": "-1",
+        "current_slot_recorded": false,
+        "endpoint_url": "https://uptimebond-psi.vercel.app/api/demo-health",
+        "ends_at_unix": "1788715768",
+        "expected_status": "200",
+        "failed_count": "0",
+        "id": "ub-2",
+        "interval_secs": "120",
+        "max_failures": "0",
+        "min_observations": "2",
+        "observed_count": "0",
+        "passed_count": "0",
+        "payout_atto": "0",
+        "payout_recipient": "",
+        "proof_token": "uptimebond-demo-v1",
+        "provider": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "readiness": {
+          "body_bytes": "91",
+          "body_digest": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
+          "checked_at_iso": "2026-09-06T17:19:10+00:00",
+          "checked_at_unix": "1788715150",
+          "exists": true,
+          "http_status": "200",
+          "provenance": "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
+        },
+        "result": "",
+        "service_name": "UptimeBond monitored acceptance d79ea8561d",
+        "settled_at_iso": "",
+        "settled_at_unix": "0",
+        "slot_count": "2",
+        "starts_at_unix": "1788715528",
+        "status": "ACTIVE",
+        "uptime_bps": "0"
+      }
+    },
+    "validator-observations": {
+      "checked_at": "2026-09-06T17:28:19.834826+00:00",
+      "expected": {
+        "total": "2",
+        "results": [
+          "PASS",
+          "PASS"
+        ]
+      },
+      "observed": {
+        "bond_id": "ub-2",
+        "items": [
+          {
+            "body_bytes": "91",
+            "body_digest": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
+            "body_within_limit": true,
+            "http_status": "200",
+            "observed_at_iso": "2026-09-06T17:25:38+00:00",
+            "observed_at_unix": "1788715538",
+            "provenance": "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH",
+            "result": "PASS",
+            "slot_index": "0",
+            "status_matched": true,
+            "token_present": true
+          },
+          {
+            "body_bytes": "91",
+            "body_digest": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
+            "body_within_limit": true,
+            "http_status": "200",
+            "observed_at_iso": "2026-09-06T17:27:38+00:00",
+            "observed_at_unix": "1788715658",
+            "provenance": "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH",
+            "result": "PASS",
+            "slot_index": "1",
+            "status_matched": true,
+            "token_present": true
+          }
+        ],
+        "total": "2"
+      }
+    },
+    "lifecycle-met": {
+      "checked_at": "2026-09-06T17:30:17.794577+00:00",
+      "expected": {
+        "status": "MET",
+        "result": "SLA_MET",
+        "observed_count": "2",
+        "passed_count": "2",
+        "failed_count": "0",
+        "uptime_bps": "10000",
+        "payout_recipient": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "payout_atto": "1000000000000000"
+      },
+      "observed": {
+        "accept_by_unix": "1788715408",
+        "accepted_at_iso": "2026-09-06T17:20:48+00:00",
+        "accepted_at_unix": "1788715248",
+        "beneficiary": "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+        "bond_atto": "1000000000000000",
+        "can_expire": false,
+        "can_finalize": false,
+        "can_observe": false,
+        "cancellation_requested": false,
+        "cancellation_requested_by": "",
+        "created_at_iso": "2026-09-06T17:17:38+00:00",
+        "created_at_unix": "1788715058",
+        "current_slot": "-1",
+        "current_slot_recorded": false,
+        "endpoint_url": "https://uptimebond-psi.vercel.app/api/demo-health",
+        "ends_at_unix": "1788715768",
+        "expected_status": "200",
+        "failed_count": "0",
+        "id": "ub-2",
+        "interval_secs": "120",
+        "max_failures": "0",
+        "min_observations": "2",
+        "observed_count": "2",
+        "passed_count": "2",
+        "payout_atto": "1000000000000000",
+        "payout_recipient": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "proof_token": "uptimebond-demo-v1",
+        "provider": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+        "readiness": {
+          "body_bytes": "91",
+          "body_digest": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
+          "checked_at_iso": "2026-09-06T17:19:10+00:00",
+          "checked_at_unix": "1788715150",
+          "exists": true,
+          "http_status": "200",
+          "provenance": "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
+        },
+        "result": "SLA_MET",
+        "service_name": "UptimeBond monitored acceptance d79ea8561d",
+        "settled_at_iso": "2026-09-06T17:29:38+00:00",
+        "settled_at_unix": "1788715778",
+        "slot_count": "2",
+        "starts_at_unix": "1788715528",
+        "status": "MET",
+        "uptime_bps": "10000"
+      }
+    }
+  },
+  "bonds": {
+    "cancellation": "ub-1",
+    "lifecycle": "ub-2"
+  },
+  "wallets": {
+    "provider": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+    "beneficiary": "0x6FBc6885159f9741e315B0CDe769E80752A2C0A5",
+    "observer": "0x88b769C4177e3BF32d9C0F782f775a3f7B1B54e0"
+  },
+  "fixture": {
+    "endpoint": "https://uptimebond-psi.vercel.app/api/demo-health",
+    "proof_token": "uptimebond-demo-v1"
+  },
+  "updated_at": "2026-09-06T17:30:24.574193+00:00",
+  "preflight": {
+    "checked_at": "2026-09-06T17:15:04.893969+00:00",
+    "source_matches": true,
+    "configuration_matches": true,
+    "stats": {
+      "admin_controls": false,
+      "experimental": true,
+      "fee_bps": "0",
+      "max_page_size": "25",
+      "max_response_bytes": "16000",
+      "probe_policy": "STRICT_INDEPENDENT_STATUS_TOKEN_SIZE_AND_SHA256",
+      "total_breached": "0",
+      "total_created": "0",
+      "total_finalized": "0",
+      "total_inconclusive": "0",
+      "total_locked_atto": "0",
+      "total_met": "0",
+      "total_paid_to_beneficiaries_atto": "0",
+      "total_returned_to_providers_atto": "0",
+      "version": "0.1.0-studionet"
+    }
+  },
+  "transfer_checks": {
+    "cancel-offer": {
+      "checked_at": "2026-09-06T17:17:28.755304+00:00",
+      "transaction": "0xfa9af14b585cb071d56733e5f1d20602bbe8eecc6c553a622e47c8afe736e317",
+      "recipient": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+      "value_atto": "1000000000000000",
+      "status": "FINALIZED",
+      "value_credited": true
+    },
+    "finalize-bond": {
+      "checked_at": "2026-09-06T17:30:21.278722+00:00",
+      "transaction": "0x6d2105c1e3352b7147a9fab4c60fe5d63df959941e5cb110a2ebef0287ad1191",
+      "recipient": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
+      "value_atto": "1000000000000000",
+      "status": "FINALIZED",
+      "value_credited": true
+    }
+  },
+  "final_stats": {
+    "admin_controls": false,
+    "experimental": true,
+    "fee_bps": "0",
+    "max_page_size": "25",
+    "max_response_bytes": "16000",
+    "probe_policy": "STRICT_INDEPENDENT_STATUS_TOKEN_SIZE_AND_SHA256",
+    "total_breached": "0",
+    "total_created": "2",
+    "total_finalized": "2",
+    "total_inconclusive": "0",
+    "total_locked_atto": "0",
+    "total_met": "1",
+    "total_paid_to_beneficiaries_atto": "0",
+    "total_returned_to_providers_atto": "2000000000000000",
+    "version": "0.1.0-studionet"
+  },
+  "review_bond": {
+    "id": "ub-2",
+    "status": "MET",
+    "endpoint": "https://uptimebond-psi.vercel.app/api/demo-health",
+    "readiness_digest": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
+    "observation_count": "2"
+  },
+  "completed_at": "2026-09-06T17:30:24.574193+00:00",
+  "result": "PASS"
+}
