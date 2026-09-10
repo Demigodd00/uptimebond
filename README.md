@@ -58,6 +58,15 @@ StudioNet integration test verifies autonomous child execution in the real GenVM
 The exact-address acceptance journal also checks native transfer credits, not
 just transaction finality.
 
+The September 10 release gate passed with 112 direct contract tests, 7 receipt
+regressions, and 30 frontend tests. Public review cases are
+[healthy ub-2](https://uptimebond-psi.vercel.app/bonds?bond=ub-2),
+[HTTP-503 ub-3](https://uptimebond-psi.vercel.app/bonds?bond=ub-3), and
+[unverifiable ub-4](https://uptimebond-psi.vercel.app/bonds?bond=ub-4).
+The last case proves that response variance preserved the pending obligation
+and paid the beneficiary after timeout. Network cancellation and transaction
+finality can delay recovery beyond the evidence deadline.
+
 New canonical contract: `0xF5E1027a28439716455F7b1778Aca17855346B87`.
 Historical deployment records are retained under deployments/history.
 Do not use the old 0.1 contract for the corrected submission.

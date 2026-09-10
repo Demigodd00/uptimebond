@@ -48,6 +48,17 @@ def output(value) -> None:
     print(json.dumps(value, default=str), flush=True)
 
 
+def child_execution_facts(receipt: dict | None) -> dict:
+    """A successful leader receipt alone does not mean consensus committed it."""
+    status = receipt.get("status", "UNKNOWN") if receipt else "NOT_FOUND"
+    leader_succeeded = bool(receipt and tx_execution_succeeded(receipt))
+    return {
+        "child_status_at_timeout": status,
+        "leader_execution_succeeded": leader_succeeded,
+        "child_committed_successfully": status == "FINALIZED" and leader_succeeded,
+    }
+
+
 def load_saved_signer() -> str:
     configured = os.environ.get("UPTIMEBOND_PRIVATE_KEY", "").strip()
     if configured:
@@ -421,7 +432,9 @@ class Acceptance:
             time.sleep(5)
         if not child or child.get("status") != "FINALIZED" or child.get("value_credited") is not True:
             raise AssertionError(f"{step}: native transfer did not finalize and credit")
-        if child.get("to_address", "").lower() != recipient.lower() or int(child.get("value", 0)) != value:
+        if (child.get("from_address", "").lower() != self.address.lower()
+                or child.get("to_address", "").lower() != recipient.lower()
+                or int(child.get("value", 0)) != value):
             raise AssertionError(f"{step}: native transfer recipient or value differs")
         self.record.setdefault("transfer_checks", {})[step] = {
             "checked_at": timestamp(),
@@ -480,8 +493,7 @@ class Acceptance:
                     raise AssertionError(f"{key}: healthy or breach check stalled: {child_hash}")
                 self.record.setdefault("unverifiable_attempts", {})[key] = {
                     "parent_transaction": parent_hash, "child_transaction": child_hash,
-                    "child_status_at_timeout": child.get("status") if child else "NOT_FOUND",
-                    "child_execution_succeeded": bool(child and tx_execution_succeeded(child)),
+                    **child_execution_facts(child),
                     "committed_state": state,
                     "observations_before_timeout": self.read("get_observations", [bond_id]),
                     "checked_at": timestamp(),

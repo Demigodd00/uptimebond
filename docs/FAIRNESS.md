@@ -39,14 +39,31 @@ it does not generate observations or determine settlement.
 - Cancellation, decline, and expiry refunds remain available only before
   acceptance. Terminal accounting precedes a single finalized value transfer.
 
-## Adversarial verification required before resubmission
+## Adversarial verification completed
 
-Test all callers (including a third wallet) trying to choose a check instant;
-duplicates, reordered and late self-calls; dropped and reverted child execution;
-different leader/validator bytes; transport errors and oversized/malformed bodies;
-partial favorable evidence; failure-to-missing substitutions under every allowed
-failure budget; attempts to cancel after acceptance; and duplicate settlement.
-Verify autonomous child transactions and both provider/beneficiary payout paths
-against the exact new StudioNet address, then update frontend and evidence links.
+112 direct tests cover all callers (including a third wallet) trying to choose a
+check instant; duplicate, reordered and late self-calls; dropped and reverted
+children; different leader/validator bytes; transport errors and oversized or
+malformed bodies; partial favorable evidence; failure-to-missing substitutions
+under every allowed failure budget; accepted-bond cancellation; and duplicate
+settlement. Independent validator replay is explicit, not leader-only testing.
+
+A real StudioNet integration deployment completed autonomous child execution.
+The canonical acceptance journal then verified healthy ub-2, HTTP-503 ub-3, and
+response-variance ub-4 on `0xF5E1027a28439716455F7b1778Aca17855346B87`.
+All wallet roles were rejected when attempting to submit a check. The variance
+child was CANCELED by the network, its parent's PENDING obligation persisted,
+and the provider's timeout transaction paid the beneficiary. Native credit was
+verified for all outcomes; no acceptance bond remained locked.
+
+Seven additional receipt tests guard against treating a successful leader
+execution inside a canceled or pending transaction as a committed check.
+Thirty frontend tests, the production build, and the full release gate passed.
+See the release note and exact-address journal for hashes and public review links.
+
+The live variance case also demonstrated a network delay before child cancellation.
+The timeout rule cannot force the network to execute at a particular instant.
+Recovery remains dependent on network progress and a permissionless settlement
+transaction. The provider cannot turn this delay or missing evidence into a refund.
 
 Reference: https://docs.genlayer.com/developers/intelligent-contracts/features/messages

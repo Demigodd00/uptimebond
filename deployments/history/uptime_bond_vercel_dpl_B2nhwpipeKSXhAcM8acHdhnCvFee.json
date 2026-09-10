@@ -3,8 +3,8 @@
   "release": "0.2.0",
   "network": "StudioNet",
   "production_url": "https://uptimebond-psi.vercel.app",
-  "deployment_url": "https://uptimebond-3wo2baplq-demi17.vercel.app",
-  "deployment_id": "dpl_E5La7XBzEK5EUaA6QLzjGbzHWvoH",
+  "deployment_url": "https://uptimebond-hr6zjk0av-demi17.vercel.app",
+  "deployment_id": "dpl_B2nhwpipeKSXhAcM8acHdhnCvFee",
   "project_id": "prj_ePCYwL2TBmKlKGMW8kdkih0N8HFM",
   "source_directory": "apps/uptimebond-web",
   "contract_address": "0xF5E1027a28439716455F7b1778Aca17855346B87",
@@ -18,7 +18,6 @@
   "fixture_sha256": "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d",
   "sampling_policy": "AUTONOMOUS_FINALIZED_SELF_CALLS",
   "missing_evidence_payout": "BENEFICIARY",
-  "verified_at": "2026-09-10 07:06:43 UTC",
-  "previous_deployment_id": "dpl_52bMvt5dnQFytPAF2noWQ7Kd6kCF",
-  "finalized_state_reads": true
+  "verified_at": "2026-09-10 06:43:20 UTC",
+  "previous_deployment_id": "dpl_2pbzUsnnBL7aZGFDUGuRUFt19EKA"
 }

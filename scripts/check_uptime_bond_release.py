@@ -144,7 +144,12 @@ def verify_records() -> tuple[bool, dict | None, dict | None]:
             checks["actual received failure demonstrated"] = any(o.get("result") == "FAIL_STATUS" and o.get("http_status") == "503" for o in observations)
         else:
             attempt = acceptance.get("unverifiable_attempts", {}).get(case, {})
-            checks["response variance did not erase the parent obligation"] = attempt.get("child_execution_succeeded") is False and attempt.get("committed_state", {}).get("status") == "ACTIVE" and any(o.get("result") == "PENDING" for o in attempt.get("observations_before_timeout", {}).get("items", []))
+            checks["response variance did not erase the parent obligation"] = (
+                attempt.get("child_committed_successfully") is False
+                and (attempt.get("child_status_at_timeout") != "FINALIZED"
+                     or attempt.get("leader_execution_succeeded") is False)
+                and attempt.get("committed_state", {}).get("status") == "ACTIVE"
+                and any(o.get("result") == "PENDING" for o in attempt.get("observations_before_timeout", {}).get("items", [])))
             checks["unverifiable record is not fabricated outage evidence"] = any(o.get("result") == "UNVERIFIABLE_TIMEOUT" and o.get("body_digest") == "" and o.get("observed_at_unix") == "0" for o in observations)
     for label, passed in checks.items():
         print(f"{'PASS' if passed else 'FAIL'}: {label}")
@@ -192,6 +197,7 @@ def verify_live(deployment: dict | None, hosting: dict | None) -> bool:
             receipt = rpc("eth_getTransactionByHash", [transfer["transaction"]])["result"]
             live_transfers.append(bool(receipt) and receipt.get("status") == "FINALIZED"
                                  and receipt.get("value_credited") is True
+                                 and receipt.get("from_address", "").lower() == address.lower()
                                  and receipt.get("to_address", "").lower() == transfer["recipient"].lower()
                                  and str(receipt.get("value")) == transfer["value_atto"])
     except (OSError, KeyError, ValueError, json.JSONDecodeError, RuntimeError) as error:
@@ -233,6 +239,7 @@ def main() -> int:
     results = [
         run_check("GenVM lint and validation", ["genvm-lint", "check", str(CONTRACT_PATH)]),
         run_check("direct contract tests", [sys.executable, "-m", "pytest", str(DIRECT_TEST_PATH), "-q"]),
+        run_check("receipt finality regression tests", [sys.executable, "-m", "pytest", str(ROOT / "tests" / "unit" / "test_uptimebond_receipts.py"), "-q"]),
         run_check(
             "release script compilation",
             [

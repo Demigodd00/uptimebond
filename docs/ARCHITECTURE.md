@@ -48,6 +48,12 @@ Acceptance starts the sequence; participant wallets cannot choose later probes.
 Network consensus scheduling determines when the actual independent fetches occur.
 Providers accept infrastructure and evidence-availability risk.
 
+The live variance test confirmed that StudioNet can hold a disagreeing child
+in consensus before canceling it. The parent obligation persisted and timeout
+settlement subsequently finalized to the beneficiary. A five-minute evidence
+deadline is not a guaranteed five-minute transaction completion time. The
+network must make progress, and an overdue check needs a settlement transaction.
+
 The public /api/demo-health fixture is stable. /api/review-health is a stateless,
 clearly named adversarial fixture: its URL commits a transition timestamp and
 either an HTTP 503 case or varying body bytes. Neither fixture is an oracle input

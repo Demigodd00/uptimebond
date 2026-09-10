@@ -2,11 +2,12 @@
 
 Use **Edit / Resubmit on the existing contribution**, not a duplicate new contribution.
 Replace every old 0.1 contract or pinned-source link. Keep the website and dedicated
-GitHub repository. Only resubmit after the release gate and acceptance journal say PASS.
+GitHub repository. The exact-address acceptance journal and full release gate
+passed on September 10, 2026. The corrected live cases below were verified.
 
 ## What did you change? (under 1,000 characters)
 
-Replaced participant-triggered sampling with contract-only self-calls dispatched after finalization. Acceptance commits the first pending attempt; each completed check commits and queues the next. Wallets cannot choose, skip, reorder, or retry checks. All planned checks are required for a refund. Transport failure or an overdue/unverifiable attempt pays the beneficiary, including when the provider calls timeout settlement. Removed cancellation after acceptance. Pending obligations survive child rollback; unavailable evidence is not presented as proof of an outage. Added 112 adversarial tests, explicit leader/validator replay, and a real StudioNet autonomous-flow test. Updated the UI's risk acknowledgements, evidence receipts, network-timing limits, contract links, and security dependencies. Deployed version 0.2.0-studionet at 0xF5E1027a28439716455F7b1778Aca17855346B87.
+Replaced wallet-triggered sampling with contract-only self-calls after finalization. Acceptance commits each required attempt; wallets cannot choose, skip, or retry checks. All planned checks are required for a provider refund. Transport failure or an overdue/unverifiable attempt pays the beneficiary; cancellation after acceptance is removed. Pending obligations survive child rollback. On the canonical StudioNet contract, ub-2 refunded the provider after healthy checks, ub-3 paid the beneficiary for HTTP 503 failures, and ub-4 paid the beneficiary after response variance canceled a check, even when the provider called timeout settlement. All native credits were verified. Added 112 adversarial contract tests, independent validator replay, 7 receipt tests, and a real autonomous-flow integration test. Updated the UI, risk disclosures, and evidence links. These are finite network-timed checks, not continuous uptime. Contract: 0xF5E1027a28439716455F7b1778Aca17855346B87.
 
 ## Application date and identity
 

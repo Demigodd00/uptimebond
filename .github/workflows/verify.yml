@@ -24,6 +24,7 @@ jobs:
         run: python scripts/cache_genvm_runners.py
       - run: genvm-lint check contracts/uptime_bond.py
       - run: python -m pytest tests/direct/test_uptime_bond.py -q
+      - run: python -m pytest tests/unit/test_uptimebond_receipts.py -q
       - run: python -m py_compile scripts/cache_genvm_runners.py scripts/deploy_uptime_bond.py scripts/uptimebond_acceptance.py tests/integration/test_uptime_bond_studionet.py scripts/check_uptime_bond_release.py
 
   web:
