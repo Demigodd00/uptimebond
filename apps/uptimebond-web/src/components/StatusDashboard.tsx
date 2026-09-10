@@ -18,7 +18,11 @@ const previewStats: ProtocolStats = {
   max_page_size: "25",
   max_response_bytes: "16000",
   probe_policy: "STRICT_INDEPENDENT_STATUS_TOKEN_SIZE_AND_SHA256",
-  version: "0.1.0-studionet",
+  sampling_policy: "AUTONOMOUS_FINALIZED_SELF_CALLS",
+  evidence_risk_bearer: "PROVIDER",
+  missing_evidence_payout: "BENEFICIARY",
+  check_timeout_secs: "300",
+  version: "0.2.0-studionet",
 };
 
 export default function StatusDashboard() {
@@ -42,7 +46,7 @@ export default function StatusDashboard() {
       <div className="status-metrics"><div><span>BONDS</span><strong>{stats.total_created}</strong></div><div><span>FINALIZED</span><strong>{stats.total_finalized}</strong></div><div><span>MET</span><strong>{stats.total_met}</strong></div><div><span>BREACHED</span><strong>{stats.total_breached}</strong></div><div><span>LOCKED</span><strong>{formatGen(stats.total_locked_atto)} GEN</strong></div></div>
       <div className="policy-card"><div><p className="eyebrow">Consensus policy</p><h2>Strict independent endpoint fetches</h2></div><dl><div><dt>Response cap</dt><dd>{Number(stats.max_response_bytes).toLocaleString()} bytes</dd></div><div><dt>Fee</dt><dd>{stats.fee_bps} bps</dd></div><div><dt>Admin settlement</dt><dd>{stats.admin_controls ? "Enabled" : "None"}</dd></div></dl><code>{stats.probe_policy}</code></div>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
-      <div className="status-notice"><strong>Test environment</strong><p>StudioNet GEN is valueless. Use public, non-sensitive health endpoints only.</p></div>
+      <div className="status-notice"><strong>Automatic sampling · provider bears evidence risk</strong><p>All checks are required. Missing or unverifiable evidence pays the beneficiary; any wallet can settle a stalled check after five minutes. StudioNet GEN is valueless.</p></div>
     </section>
   );
 }

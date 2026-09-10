@@ -35,7 +35,7 @@ TEST_PATH = ROOT / "tests" / "direct" / "test_uptime_bond.py"
 DEPLOYMENTS_DIR = ROOT / "deployments"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
 TX_PATTERN = re.compile(r"^0x[0-9a-fA-F]{64}$")
-VERSION = "0.1.0-studionet"
+VERSION = "0.2.0-studionet"
 
 
 def parse_args() -> argparse.Namespace:
@@ -134,6 +134,10 @@ def verify_configuration(client, address: str, account) -> dict:
         "max_page_size": "25",
         "max_response_bytes": "16000",
         "probe_policy": "STRICT_INDEPENDENT_STATUS_TOKEN_SIZE_AND_SHA256",
+        "sampling_policy": "AUTONOMOUS_FINALIZED_SELF_CALLS",
+        "evidence_risk_bearer": "PROVIDER",
+        "missing_evidence_payout": "BENEFICIARY",
+        "check_timeout_secs": "300",
         "version": VERSION,
         "total_created": "0",
         "total_finalized": "0",

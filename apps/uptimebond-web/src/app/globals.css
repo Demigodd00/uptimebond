@@ -154,8 +154,8 @@ input::placeholder, textarea::placeholder { color: #496057; }
 .review-grid dd { margin: 7px 0 0; font-size: 9px; overflow-wrap: anywhere; }
 .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important; }
 .terms-note { display: flex; justify-content: space-between; gap: 20px; padding: 13px 15px; border: 1px solid rgba(145, 242, 189, .16); border-radius: 11px; background: rgba(145, 242, 189, .035); }
-.terms-note strong { font-size: 8px; }
-.terms-note span { color: var(--muted); font-size: 8px; }
+.terms-note strong { flex-shrink: 0; font-size: 12px; line-height: 1.6; }
+.terms-note span { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .form-actions, .success-actions { display: flex; justify-content: flex-end; gap: 9px; }
 .form-error { margin: 13px 0 0; padding: 11px 13px; border: 1px solid rgba(255, 128, 152, .25); border-radius: 10px; background: rgba(255, 128, 152, .05); color: #ffafbd; font-size: 8px; line-height: 1.5; }
 .tx-notice { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; margin-top: 13px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
@@ -406,6 +406,14 @@ footer { border-top: 1px solid var(--line); }
   .status-metrics > div:nth-child(even) { border-left: 0; }
   .status-metrics > div + div { border-top: 1px solid var(--line); }
 }
+
+.risk-consent { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; margin: 20px 0; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.risk-consent > span { font-size: 13px; font-weight: 500; line-height: 1.6; }
+.risk-consent input[type="checkbox"] { width: 18px; height: 18px; min-width: 18px; min-height: 18px; padding: 0; margin-top: 3px; accent-color: var(--mint); }
+.terms-note .mono { overflow-wrap: anywhere; }
+.slot strong { overflow-wrap: anywhere; }
+.evidence-panel > summary { font-size: 12px; }
+.evidence-list article strong, .evidence-list article p, .evidence-list dt, .evidence-list dd, .evidence-list code { font-size: 11px; line-height: 1.6; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }

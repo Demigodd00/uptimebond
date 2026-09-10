@@ -1,5 +1,5 @@
 import { chains, createClient } from "genlayer-js";
-import { TransactionStatus } from "genlayer-js/types";
+import { TransactionHashVariant, TransactionStatus } from "genlayer-js/types";
 import { assertSuccessfulExecution } from "./receipt";
 import { oneTransactionAtATime } from "./ui-state";
 import { connectStudioWallet, type EthereumProvider, type WalletOption } from "./wallet";
@@ -47,6 +47,8 @@ export interface ObservationRecord {
   body_bytes: string;
   observed_at_unix: string;
   observed_at_iso: string;
+  scheduled_at_unix: string;
+  deadline_unix: string;
   provenance: string;
 }
 
@@ -66,6 +68,11 @@ export interface BondView extends BondSummary {
   accepted_at_unix: string;
   accepted_at_iso: string;
   readiness: ReadinessRecord;
+  unverifiable_count: string;
+  pending_deadline_unix: string;
+  sampling_policy: string;
+  evidence_risk_bearer: string;
+  check_timeout_secs: string;
   uptime_bps: string;
   current_slot: string;
   current_slot_recorded: boolean;
@@ -96,6 +103,10 @@ export interface ProtocolStats {
   max_page_size: string;
   max_response_bytes: string;
   probe_policy: string;
+  sampling_policy: string;
+  evidence_risk_bearer: string;
+  missing_evidence_payout: string;
+  check_timeout_secs: string;
   version: string;
 }
 
@@ -106,10 +117,7 @@ export interface CreateBondInput {
   expectedStatus: number;
   proofToken: string;
   acceptByUnix: number;
-  startsAtUnix: number;
-  intervalSecs: number;
   slotCount: number;
-  minObservations: number;
   maxFailures: number;
   bondAtto: bigint;
 }
@@ -248,26 +256,26 @@ async function write(
 }
 
 export async function listBonds(): Promise<BondSummary[]> {
-  const first = await withReadRetry(() => readClient.readContract({ address: contractAddress(), functionName: "list_bonds", args: [0, 25] })) as unknown as { total: string; items: BondSummary[] };
+  const first = await withReadRetry(() => readClient.readContract({ address: contractAddress(), transactionHashVariant: TransactionHashVariant.LATEST_FINAL, functionName: "list_bonds", args: [0, 25] })) as unknown as { total: string; items: BondSummary[] };
   const total = Number(first.total);
   if (!Number.isSafeInteger(total) || total < 0) throw new Error("The contract returned an invalid bond count.");
   const page = total > 25
-    ? await withReadRetry(() => readClient.readContract({ address: contractAddress(), functionName: "list_bonds", args: [total - 25, 25] })) as unknown as { items: BondSummary[] }
+    ? await withReadRetry(() => readClient.readContract({ address: contractAddress(), transactionHashVariant: TransactionHashVariant.LATEST_FINAL, functionName: "list_bonds", args: [total - 25, 25] })) as unknown as { items: BondSummary[] }
     : first;
   return [...page.items].reverse();
 }
 
 export async function getBond(bondId: string): Promise<BondView> {
-  return await withReadRetry(() => readClient.readContract({ address: contractAddress(), functionName: "get_bond", args: [bondId] })) as unknown as BondView;
+  return await withReadRetry(() => readClient.readContract({ address: contractAddress(), transactionHashVariant: TransactionHashVariant.LATEST_FINAL, functionName: "get_bond", args: [bondId] })) as unknown as BondView;
 }
 
 export async function getObservations(bondId: string): Promise<ObservationRecord[]> {
-  const result = await withReadRetry(() => readClient.readContract({ address: contractAddress(), functionName: "get_observations", args: [bondId] })) as unknown as { items: ObservationRecord[] };
+  const result = await withReadRetry(() => readClient.readContract({ address: contractAddress(), transactionHashVariant: TransactionHashVariant.LATEST_FINAL, functionName: "get_observations", args: [bondId] })) as unknown as { items: ObservationRecord[] };
   return result.items;
 }
 
 export async function getStats(): Promise<ProtocolStats> {
-  return await withReadRetry(() => readClient.readContract({ address: contractAddress(), functionName: "get_stats", args: [] })) as unknown as ProtocolStats;
+  return await withReadRetry(() => readClient.readContract({ address: contractAddress(), transactionHashVariant: TransactionHashVariant.LATEST_FINAL, functionName: "get_stats", args: [] })) as unknown as ProtocolStats;
 }
 
 export const createBond = (session: WalletSession, input: CreateBondInput, onProgress: (progress: TxProgress) => void) =>
@@ -278,10 +286,7 @@ export const createBond = (session: WalletSession, input: CreateBondInput, onPro
     input.expectedStatus,
     input.proofToken,
     input.acceptByUnix,
-    input.startsAtUnix,
-    input.intervalSecs,
     input.slotCount,
-    input.minObservations,
     input.maxFailures,
   ], input.bondAtto, onProgress);
 
@@ -290,7 +295,4 @@ export const acceptBond = (session: WalletSession, bondId: string, onProgress: (
 export const declineBond = (session: WalletSession, bondId: string, onProgress: (progress: TxProgress) => void) => write(session, "decline_bond", [bondId], 0n, onProgress);
 export const cancelOffer = (session: WalletSession, bondId: string, onProgress: (progress: TxProgress) => void) => write(session, "cancel_offer", [bondId], 0n, onProgress);
 export const expireOffer = (session: WalletSession, bondId: string, onProgress: (progress: TxProgress) => void) => write(session, "expire_offer", [bondId], 0n, onProgress);
-export const requestCancellation = (session: WalletSession, bondId: string, onProgress: (progress: TxProgress) => void) => write(session, "request_cancellation", [bondId], 0n, onProgress);
-export const withdrawCancellation = (session: WalletSession, bondId: string, onProgress: (progress: TxProgress) => void) => write(session, "withdraw_cancellation_request", [bondId], 0n, onProgress);
-export const recordObservation = (session: WalletSession, bondId: string, onProgress: (progress: TxProgress) => void) => write(session, "record_observation", [bondId], 0n, onProgress);
 export const finalizeBond = (session: WalletSession, bondId: string, onProgress: (progress: TxProgress) => void) => write(session, "finalize_bond", [bondId], 0n, onProgress);

@@ -13,11 +13,8 @@ import {
   getBond,
   getObservations,
   listBonds,
-  recordObservation,
-  requestCancellation,
   shortenAddress,
   verifyReadiness,
-  withdrawCancellation,
   type BondSummary,
   type BondView,
   type ObservationRecord,
@@ -40,9 +37,9 @@ const previewBond: BondView = {
   accept_by_unix: "1799000000",
   starts_at_unix: "1800000000",
   ends_at_unix: "1800001080",
-  interval_secs: "360",
+  interval_secs: "0",
   slot_count: "3",
-  min_observations: "2",
+  min_observations: "3",
   max_failures: "0",
   created_at_unix: "1798999000",
   created_at_iso: "2027-01-03T09:16:40+00:00",
@@ -60,10 +57,15 @@ const previewBond: BondView = {
   observed_count: "2",
   passed_count: "2",
   failed_count: "0",
-  uptime_bps: "10000",
+  uptime_bps: "6666",
+  unverifiable_count: "0",
+  pending_deadline_unix: "1800001080",
+  sampling_policy: "AUTONOMOUS_FINALIZED_SELF_CALLS",
+  evidence_risk_bearer: "PROVIDER",
+  check_timeout_secs: "300",
   current_slot: "2",
   current_slot_recorded: false,
-  can_observe: true,
+  can_observe: false,
   can_finalize: false,
   can_expire: false,
   cancellation_requested: false,
@@ -84,12 +86,14 @@ const previewObservations: ObservationRecord[] = [0, 1].map((slot) => ({
   body_within_limit: true,
   body_digest: "3ca2c1474c873ad828248ccdffbc09b9c78f4a46e5561db34c98277a3f47d125",
   body_bytes: "75",
-  observed_at_unix: String(1800000000 + slot * 360),
+  scheduled_at_unix: String(1800000000 + slot * 60),
+  deadline_unix: String(1800000300 + slot * 60),
+  observed_at_unix: String(1800000000 + slot * 60),
   observed_at_iso: new Date((1800000000 + slot * 360) * 1000).toISOString(),
   provenance: "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH",
 }));
 
-const terminalStatuses = new Set(["MET", "BREACHED", "INCONCLUSIVE", "CANCELLED", "DECLINED", "EXPIRED"]);
+const terminalStatuses = new Set(["MET", "BREACHED", "UNVERIFIABLE", "INCONCLUSIVE", "CANCELLED", "DECLINED", "EXPIRED"]);
 
 function displayStatus(status: string): string {
   return status.toLowerCase().replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase());
@@ -98,6 +102,9 @@ function displayStatus(status: string): string {
 function displayResult(result: string): string {
   const labels: Record<string, string> = {
     SLA_MET: "terms met",
+    ALL_REQUIRED_CHECKS_MET: "all required checks complete",
+    REQUIRED_EVIDENCE_UNAVAILABLE: "unavailable evidence · beneficiary paid",
+    FETCH_UNVERIFIABLE: "unverifiable fetch · beneficiary paid",
     FAILURE_ALLOWANCE_EXCEEDED: "terms breached",
     INSUFFICIENT_OBSERVATIONS: "inconclusive",
     BENEFICIARY_DECLINED: "declined",
@@ -126,6 +133,7 @@ export default function BondBoard({ session }: { session: WalletSession | null }
   const [observations, setObservations] = useState<ObservationRecord[]>([]);
   const [filter, setFilter] = useState<"ALL" | "OPEN" | "ACTIVE" | "FINAL">("ALL");
   const [lookupId, setLookupId] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<TxProgress | null>(null);
@@ -147,6 +155,9 @@ export default function BondBoard({ session }: { session: WalletSession | null }
       if (version !== requestVersion.current) return;
       setSelected(bond);
       setObservations(records);
+      setAcceptTerms(false);
+      setItems((current) => current.map((item) => item.id === bond.id ? bond : item));
+      window.history.replaceState(window.history.state, "", bondShareUrl(window.location.origin, bond.id));
     } catch (reason) {
       if (version === requestVersion.current) setError(friendlyError(reason));
     } finally {
@@ -170,7 +181,7 @@ export default function BondBoard({ session }: { session: WalletSession | null }
       const requested = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("bond")?.trim() : "";
       const nextId = requested || selected?.id || nextItems[0]?.id;
       if (nextId) await openBond(nextId);
-      else setSelected(null);
+      else { setSelected(null); setObservations([]); setLoading(false); }
     } catch (reason) {
       setError(friendlyError(reason));
       setLoading(false);
@@ -182,6 +193,30 @@ export default function BondBoard({ session }: { session: WalletSession | null }
     const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Read-only polling follows contract-created checks; it never triggers them.
+  useEffect(() => {
+    if (!CONTRACT_READY || selected?.status !== "ACTIVE") return;
+    let cancelled = false;
+    let reading = false;
+    const bondId = selected.id;
+    const refresh = async () => {
+      if (reading || document.hidden || busy) return;
+      reading = true;
+      const version = requestVersion.current;
+      try {
+        const [bond, records] = await Promise.all([getBond(bondId), getObservations(bondId)]);
+        if (cancelled || version !== requestVersion.current) return;
+        setSelected(bond);
+        setObservations(records);
+        setItems((current) => current.map((item) => item.id === bond.id ? bond : item));
+      } catch (reason) {
+        if (!cancelled) setError(friendlyError(reason));
+      } finally { reading = false; }
+    };
+    const timer = window.setInterval(() => void refresh(), 12_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [selected?.id, selected?.status, busy]);
 
   const filtered = useMemo(() => items.filter((item) => {
     if (filter === "ALL") return true;
@@ -257,9 +292,9 @@ export default function BondBoard({ session }: { session: WalletSession | null }
             </header>
 
             <div className="score-grid">
-              <div className="score-main"><span>SAMPLED RESULT</span><strong>{Number(selected.observed_count) ? formatPercent(selected.uptime_bps) : "—"}</strong><small>{selected.passed_count} pass · {selected.failed_count} fail</small></div>
+              <div className="score-main"><span>REQUIRED CHECKS PASSED</span><strong>{Number(selected.observed_count) ? formatPercent(selected.uptime_bps) : "—"}</strong><small>{selected.passed_count} pass · {selected.failed_count} fail · {selected.unverifiable_count} unverifiable</small></div>
               <div><span>TEST BOND</span><strong>{formatGen(selected.bond_atto)} GEN</strong><small>{terminalStatuses.has(selected.status) ? displayResult(selected.result) : "locked in contract"}</small></div>
-              <div><span>{selected.status === "ACTIVE" ? "MONITOR ENDS" : "CHECKS"}</span><strong>{selected.status === "ACTIVE" ? formatCountdown(selected.ends_at_unix, now) : `${selected.observed_count} / ${selected.slot_count}`}</strong><small>{localTime(selected.ends_at_unix)}</small></div>
+              <div><span>{selected.status === "ACTIVE" ? "EVIDENCE DEADLINE" : "CHECKS"}</span><strong>{selected.status === "ACTIVE" ? formatCountdown(selected.ends_at_unix, now) : `${selected.observed_count} / ${selected.slot_count}`}</strong><small>{localTime(selected.ends_at_unix)}</small></div>
             </div>
 
             <div className="parties-row">
@@ -270,12 +305,16 @@ export default function BondBoard({ session }: { session: WalletSession | null }
             </div>
 
             <section className="slots-section">
-              <div className="section-heading"><div><p className="eyebrow">Validator observations</p><h3>Fixed monitoring slots</h3></div><span>{selected.min_observations} required · {selected.max_failures} failures allowed</span></div>
+              <div className="section-heading"><div><p className="eyebrow">Validator observations</p><h3>Automatic validator checks</h3></div><span>{selected.min_observations} required · {selected.max_failures} failures allowed</span></div>
               <div className="slot-grid">
                 {Array.from({ length: Number(selected.slot_count) }, (_, slot) => {
                   const record = observationBySlot.get(slot);
                   const active = selected.status === "ACTIVE" && Number(selected.current_slot) === slot;
-                  return <div className={`slot ${record?.result === "PASS" ? "passed" : record ? "failed" : active ? "current" : ""}`} key={slot}><span>{String(slot + 1).padStart(2, "0")}</span><i /> <strong>{record ? (record.result === "PASS" ? "PASS" : "FAIL") : active ? "DUE" : "—"}</strong>{record ? <small>HTTP {record.http_status}</small> : <small>{localTime(String(Number(selected.starts_at_unix) + slot * Number(selected.interval_secs)))}</small>}</div>;
+                  const pending = record?.result === "PENDING";
+                  const unavailable = record?.result.startsWith("UNVERIFIABLE");
+                  const hasResponse = Boolean(record?.body_digest);
+                  const label = record?.result === "PASS" ? "PASS" : pending ? "PENDING" : unavailable ? "UNVERIFIABLE" : record ? "FAIL" : "—";
+                  return <div className={`slot ${record?.result === "PASS" ? "passed" : record && !pending ? "failed" : active ? "current" : ""}`} key={slot}><span>{String(slot + 1).padStart(2, "0")}</span><i /><strong>{label}</strong><small>{hasResponse ? `HTTP ${record?.http_status}` : pending ? "Contract-queued" : unavailable ? "No verified response" : "Not executed"}</small></div>;
                 })}
               </div>
             </section>
@@ -284,31 +323,34 @@ export default function BondBoard({ session }: { session: WalletSession | null }
               <div className="terms-grid">
                 <div><span>EXPECTED RESPONSE</span><strong>HTTP {selected.expected_status}</strong></div>
                 <div><span>PROOF TOKEN</span><strong className="mono">{selected.proof_token}</strong></div>
-                <div><span>INTERVAL</span><strong>{Math.round(Number(selected.interval_secs) / 60)} minutes</strong></div>
-                <div><span>MINIMUM EVIDENCE</span><strong>{selected.min_observations} of {selected.slot_count}</strong></div>
+                <div><span>TIMING</span><strong>After consensus finality</strong></div>
+                <div><span>REQUIRED EVIDENCE</span><strong>All {selected.slot_count} checks</strong></div>
               </div>
             </section>
 
             {observations.length > 0 ? (
               <details className="evidence-panel">
                 <summary>Evidence receipts <span>{observations.length}</span></summary>
-                <div className="evidence-list">{observations.map((record) => <article key={record.slot_index}><div><span className={`status-dot ${record.result === "PASS" ? "positive" : "negative"}`} /><strong>Slot {Number(record.slot_index) + 1} · {record.result.replace(/_/g, " ")}</strong><small>{localTime(record.observed_at_unix)}</small></div><dl><div><dt>HTTP</dt><dd>{record.http_status}</dd></div><div><dt>Token</dt><dd>{record.token_present ? "Found" : "Missing"}</dd></div><div><dt>Bytes</dt><dd>{record.body_bytes}</dd></div></dl><code>{record.body_digest}</code></article>)}</div>
+                <div className="evidence-list">{observations.map((record) => <article key={record.slot_index}>
+                  <div><span className={`status-dot ${record.result === "PASS" ? "positive" : record.result === "PENDING" ? "live" : "negative"}`} /><strong>Check {Number(record.slot_index) + 1} · {record.result.replace(/_/g, " ")}</strong><small>{localTime(record.observed_at_unix)}</small></div>
+                  <p>Committed: {localTime(record.scheduled_at_unix)} · Evidence deadline: {localTime(record.deadline_unix)}</p>
+                  {record.body_digest ? <><dl><div><dt>HTTP</dt><dd>{record.http_status}</dd></div><div><dt>Token</dt><dd>{record.token_present ? "Found" : "Missing"}</dd></div><div><dt>Bytes</dt><dd>{record.body_bytes}</dd></div></dl><code>{record.body_digest}</code></> : <p>{record.result === "PENDING" ? "Waiting for the contract's queued check." : "No verifiable response. This is not proof of an outage."}</p>}
+                </article>)}</div>
               </details>
             ) : null}
 
+            <div className="terms-note"><strong>Evidence risk: provider</strong><span>Missing or unverifiable evidence pays the beneficiary, including network delays. No manual checks, retries, or cancellation after acceptance. These are finite checks, not continuous uptime monitoring.</span></div>
+            {selected.status === "READY" && role === "beneficiary" ? <label className="risk-consent"><input type="checkbox" checked={acceptTerms} onChange={(event) => setAcceptTerms(event.target.checked)} disabled={busy} /><span>I accept the automatic checks, failure allowance, and evidence-risk payout terms.</span></label> : null}
+            {selected.payout_recipient ? <div className="terms-note"><strong>Settlement recipient · {formatGen(selected.payout_atto)} test GEN</strong><span className="mono">{selected.payout_recipient}</span></div> : null}
             <section className="next-action">
-              <div><p className="eyebrow">Next action</p><h3>{terminalStatuses.has(selected.status) ? "Settlement complete" : selected.status === "OFFERED" ? "Prove endpoint readiness" : selected.status === "READY" ? "Beneficiary review" : selected.can_finalize ? "Monitoring complete" : selected.can_observe ? "Current slot is open" : "Waiting for the next slot"}</h3><p>Acting as {role}{session ? ` · ${shortenAddress(session.address)}` : " · wallet not connected"}</p></div>
+              <div><p className="eyebrow">Next action</p><h3>{terminalStatuses.has(selected.status) ? "Settlement complete" : selected.status === "OFFERED" ? "Prove endpoint readiness" : selected.status === "READY" ? "Beneficiary review" : selected.can_finalize || now >= Number(selected.pending_deadline_unix) ? "Settle unavailable evidence" : "Checks running automatically"}</h3><p>Acting as {role}{session ? ` · ${shortenAddress(session.address)}` : " · wallet not connected"}</p></div>
               <div className="action-buttons">
                 {selected.status === "OFFERED" && role === "provider" ? <button className="button button-primary" disabled={busy} onClick={() => void execute((active, update) => verifyReadiness(active, selected.id, update))}>Verify readiness</button> : null}
                 {(selected.status === "OFFERED" || selected.status === "READY") && role === "provider" ? <button className="button button-danger" disabled={busy} onClick={() => void execute((active, update) => cancelOffer(active, selected.id, update))}>Cancel offer</button> : null}
-                {selected.status === "READY" && role === "beneficiary" ? <button className="button button-primary" disabled={busy} onClick={() => void execute((active, update) => acceptBond(active, selected.id, update))}>Accept bond</button> : null}
+                {selected.status === "READY" && role === "beneficiary" ? <button className="button button-primary" disabled={busy || !acceptTerms} onClick={() => void execute((active, update) => acceptBond(active, selected.id, update))}>Accept bond</button> : null}
                 {(selected.status === "OFFERED" || selected.status === "READY") && role === "beneficiary" ? <button className="button button-danger" disabled={busy} onClick={() => void execute((active, update) => declineBond(active, selected.id, update))}>Decline</button> : null}
                 {selected.can_expire ? <button className="button button-secondary" disabled={busy} onClick={() => void execute((active, update) => expireOffer(active, selected.id, update))}>Expire offer</button> : null}
-                {selected.can_observe ? <button className="button button-primary" disabled={busy} onClick={() => void execute((active, update) => recordObservation(active, selected.id, update))}>Run validator check</button> : null}
-                {selected.can_finalize ? <button className="button button-primary" disabled={busy} onClick={() => void execute((active, update) => finalizeBond(active, selected.id, update))}>Finalize bond</button> : null}
-                {selected.status === "ACTIVE" && role !== "observer" && !selected.cancellation_requested ? <button className="button button-secondary" disabled={busy} onClick={() => void execute((active, update) => requestCancellation(active, selected.id, update))}>Request cancellation</button> : null}
-                {selected.status === "ACTIVE" && selected.cancellation_requested && role !== "observer" && session?.address.toLowerCase() === selected.cancellation_requested_by.toLowerCase() ? <button className="button button-secondary" disabled={busy} onClick={() => void execute((active, update) => withdrawCancellation(active, selected.id, update))}>Withdraw request</button> : null}
-                {selected.status === "ACTIVE" && selected.cancellation_requested && role !== "observer" && session?.address.toLowerCase() !== selected.cancellation_requested_by.toLowerCase() ? <button className="button button-danger" disabled={busy} onClick={() => void execute((active, update) => requestCancellation(active, selected.id, update))}>Confirm cancellation</button> : null}
+                {selected.status === "ACTIVE" && (selected.can_finalize || now >= Number(selected.pending_deadline_unix)) ? <button className="button button-primary" disabled={busy} onClick={() => void execute((active, update) => finalizeBond(active, selected.id, update))}>Settle unavailable evidence</button> : null}
               </div>
             </section>
             {error ? <p className="form-error" role="alert">{error}</p> : null}

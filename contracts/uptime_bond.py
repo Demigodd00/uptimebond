@@ -8,16 +8,13 @@ from datetime import datetime, timezone
 
 ERROR_EXPECTED = "[EXPECTED]"
 
-VERSION = "0.1.0-studionet"
+VERSION = "0.2.0-studionet"
 MIN_BOND_ATTO = 10 ** 15
 MAX_BOND_ATTO = 10 * 10 ** 18
 MIN_SETUP_LEAD_SECS = 120
-MIN_ACCEPTANCE_BUFFER_SECS = 60
-MIN_INTERVAL_SECS = 60
-MAX_INTERVAL_SECS = 24 * 60 * 60
+CHECK_TIMEOUT_SECS = 300
 MIN_SLOT_COUNT = 2
 MAX_SLOT_COUNT = 12
-MAX_MONITORING_SECS = 7 * 24 * 60 * 60
 MAX_SERVICE_NAME_CHARS = 80
 MAX_ENDPOINT_URL_CHARS = 360
 MIN_PROOF_TOKEN_CHARS = 8
@@ -133,6 +130,8 @@ class Bond:
     settled_at_iso: str
     payout_recipient: Address
     payout_atto: u256
+    pending_deadline_unix: u256
+    unverifiable_count: u256
 
 
 @allow_storage
@@ -149,6 +148,8 @@ class Observation:
     body_bytes: u256
     observed_at_unix: u256
     observed_at_iso: str
+    scheduled_at_unix: u256
+    deadline_unix: u256
 
 
 class UptimeBond(gl.Contract):
@@ -185,10 +186,7 @@ class UptimeBond(gl.Contract):
         expected_status: u256,
         proof_token: str,
         accept_by_unix: u256,
-        starts_at_unix: u256,
-        interval_secs: u256,
         slot_count: u256,
-        min_observations: u256,
         max_failures: u256,
     ) -> str:
         amount = gl.message.value
@@ -214,30 +212,13 @@ class UptimeBond(gl.Contract):
             raise gl.vm.UserError(
                 f"{ERROR_EXPECTED} acceptance deadline must be at least {MIN_SETUP_LEAD_SECS}s in the future"
             )
-        if int(starts_at_unix) < int(accept_by_unix) + MIN_ACCEPTANCE_BUFFER_SECS:
-            raise gl.vm.UserError(
-                f"{ERROR_EXPECTED} monitoring must start at least {MIN_ACCEPTANCE_BUFFER_SECS}s after the acceptance deadline"
-            )
-        if int(interval_secs) < MIN_INTERVAL_SECS or int(interval_secs) > MAX_INTERVAL_SECS:
-            raise gl.vm.UserError(
-                f"{ERROR_EXPECTED} interval must be {MIN_INTERVAL_SECS}..{MAX_INTERVAL_SECS} seconds"
-            )
         if int(slot_count) < MIN_SLOT_COUNT or int(slot_count) > MAX_SLOT_COUNT:
             raise gl.vm.UserError(
                 f"{ERROR_EXPECTED} slot count must be {MIN_SLOT_COUNT}..{MAX_SLOT_COUNT}"
             )
-        duration = int(interval_secs) * int(slot_count)
-        if duration > MAX_MONITORING_SECS:
+        if int(max_failures) >= int(slot_count):
             raise gl.vm.UserError(
-                f"{ERROR_EXPECTED} monitoring duration cannot exceed {MAX_MONITORING_SECS} seconds"
-            )
-        if int(min_observations) < 1 or int(min_observations) > int(slot_count):
-            raise gl.vm.UserError(
-                f"{ERROR_EXPECTED} minimum observations must be 1..slot count"
-            )
-        if int(max_failures) >= int(min_observations):
-            raise gl.vm.UserError(
-                f"{ERROR_EXPECTED} allowed failures must be lower than minimum observations"
+                f"{ERROR_EXPECTED} allowed failures must be lower than the required check count"
             )
 
         bond_id = "ub-" + str(int(self.next_id))
@@ -252,10 +233,10 @@ class UptimeBond(gl.Contract):
             beneficiary=beneficiary_address,
             bond_atto=amount,
             accept_by_unix=accept_by_unix,
-            starts_at_unix=starts_at_unix,
-            interval_secs=interval_secs,
+            starts_at_unix=u256(0),
+            interval_secs=u256(0),
             slot_count=slot_count,
-            min_observations=min_observations,
+            min_observations=slot_count,
             max_failures=max_failures,
             created_at_unix=u256(now),
             created_at_iso=_to_iso(now),
@@ -278,6 +259,8 @@ class UptimeBond(gl.Contract):
             settled_at_iso="",
             payout_recipient=gl.message.sender_address,
             payout_atto=u256(0),
+            pending_deadline_unix=u256(0),
+            unverifiable_count=u256(0),
         )
         self.bond_ids.append(bond_id)
         self.total_created = u256(int(self.total_created) + 1)
@@ -286,7 +269,20 @@ class UptimeBond(gl.Contract):
 
     def _probe(self, endpoint_url: str, expected_status: u256, proof_token: str) -> dict:
         def fetch_and_normalize() -> dict:
-            response = gl.nondet.web.get(endpoint_url)
+            try:
+                response = gl.nondet.web.get(endpoint_url)
+            except Exception:
+                # A canonical non-passing record can reach consensus even when
+                # validators receive different transport exception messages.
+                return {
+                    "result": "UNVERIFIABLE_FETCH",
+                    "http_status": 0,
+                    "status_matched": False,
+                    "token_present": False,
+                    "body_within_limit": False,
+                    "body_digest": "",
+                    "body_bytes": 0,
+                }
             body = response.body
             body_bytes = len(body)
             body_within_limit = body_bytes <= MAX_RESPONSE_BYTES
@@ -380,13 +376,11 @@ class UptimeBond(gl.Contract):
         now = _now_unix()
         if now >= int(bond.accept_by_unix):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} acceptance deadline has passed")
-        if now >= int(bond.starts_at_unix):
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} monitoring has already started")
-
         bond.status = "ACTIVE"
         bond.accepted_at_unix = u256(now)
         bond.accepted_at_iso = _to_iso(now)
-        self.bonds[bond_id] = bond
+        bond.starts_at_unix = u256(now)
+        self._queue_observation(bond, bond_id, 0)
 
     @gl.public.write
     def decline_bond(self, bond_id: str) -> None:
@@ -403,7 +397,7 @@ class UptimeBond(gl.Contract):
         if gl.message.sender_address != bond.provider:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} only the provider can cancel the offer")
         if bond.status not in ("OFFERED", "READY"):
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} accepted bonds require mutual cancellation")
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} accepted bonds cannot be cancelled")
         self._return_to_provider(bond, bond_id, "CANCELLED", "PROVIDER_CANCELLED")
 
     @gl.public.write
@@ -415,52 +409,45 @@ class UptimeBond(gl.Contract):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} acceptance window is still open")
         self._return_to_provider(bond, bond_id, "EXPIRED", "ACCEPTANCE_EXPIRED")
 
-    @gl.public.write
-    def request_cancellation(self, bond_id: str) -> None:
-        bond = self._get_bond(bond_id)
-        sender = gl.message.sender_address
-        if bond.status != "ACTIVE":
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} only active bonds use mutual cancellation")
-        if sender != bond.provider and sender != bond.beneficiary:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} only a participant can request cancellation")
-        if _now_unix() >= self._ends_at(bond):
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} monitoring has ended; finalize the bond")
-
-        if not bond.cancellation_requested:
-            bond.cancellation_requested = True
-            bond.cancellation_requested_by = sender
-            self.bonds[bond_id] = bond
-            return
-        if bond.cancellation_requested_by == sender:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} cancellation is already awaiting the other participant")
-        self._return_to_provider(bond, bond_id, "CANCELLED", "MUTUAL_CANCELLATION")
-
-    @gl.public.write
-    def withdraw_cancellation_request(self, bond_id: str) -> None:
-        bond = self._get_bond(bond_id)
-        if bond.status != "ACTIVE" or not bond.cancellation_requested:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} no active cancellation request")
-        if gl.message.sender_address != bond.cancellation_requested_by:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} only the requester can withdraw cancellation")
-        bond.cancellation_requested = False
+    def _queue_observation(self, bond: Bond, bond_id: str, slot_index: int) -> None:
+        now = _now_unix()
+        deadline = now + CHECK_TIMEOUT_SECS
+        key = self._observation_key(bond_id, slot_index)
+        if key in self.observations:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} check is already committed")
+        # This obligation is committed by the parent before the child fetches.
+        # A failed/rolled-back child cannot erase it or open a public retry path.
+        self.observations[key] = Observation(
+            bond_id=bond_id, slot_index=u256(slot_index), result="PENDING",
+            http_status=u256(0), status_matched=False, token_present=False,
+            body_within_limit=False, body_digest="", body_bytes=u256(0),
+            observed_at_unix=u256(0), observed_at_iso="",
+            scheduled_at_unix=u256(now), deadline_unix=u256(deadline),
+        )
+        bond.pending_deadline_unix = u256(deadline)
         self.bonds[bond_id] = bond
+        gl.get_contract_at(gl.message.contract_address).emit(on="finalized").record_observation(
+            bond_id, u256(slot_index)
+        )
 
     @gl.public.write
-    def record_observation(self, bond_id: str) -> None:
+    def record_observation(self, bond_id: str, slot_index: u256) -> None:
+        if gl.message.sender_address != gl.message.contract_address:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} only the contract can execute scheduled checks")
         bond = self._get_bond(bond_id)
         if bond.status != "ACTIVE":
             raise gl.vm.UserError(f"{ERROR_EXPECTED} only active bonds can be observed")
         now = _now_unix()
-        ends_at = self._ends_at(bond)
-        if now < int(bond.starts_at_unix):
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} monitoring has not started")
-        if now >= ends_at:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} monitoring has ended")
-
-        slot_index = (now - int(bond.starts_at_unix)) // int(bond.interval_secs)
-        key = self._observation_key(bond_id, slot_index)
-        if key in self.observations:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} current monitoring slot is already recorded")
+        index = int(slot_index)
+        key = self._observation_key(bond_id, index)
+        if index != int(bond.observed_count) or key not in self.observations:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} check is duplicate, unordered, or not scheduled")
+        attempt = self.observations[key]
+        if attempt.result != "PENDING":
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} check is already resolved")
+        if now >= int(attempt.deadline_unix):
+            self._expire_attempt(bond, bond_id)
+            return
 
         probe = self._probe(bond.endpoint_url, bond.expected_status, bond.proof_token)
         self.observations[key] = Observation(
@@ -475,36 +462,55 @@ class UptimeBond(gl.Contract):
             body_bytes=u256(probe["body_bytes"]),
             observed_at_unix=u256(now),
             observed_at_iso=_to_iso(now),
+            scheduled_at_unix=attempt.scheduled_at_unix,
+            deadline_unix=attempt.deadline_unix,
         )
         bond.observed_count = u256(int(bond.observed_count) + 1)
         if probe["result"] == "PASS":
             bond.passed_count = u256(int(bond.passed_count) + 1)
+        elif probe["result"] == "UNVERIFIABLE_FETCH":
+            bond.unverifiable_count = u256(int(bond.unverifiable_count) + 1)
+            self._pay_beneficiary(bond, bond_id, "UNVERIFIABLE", "FETCH_UNVERIFIABLE")
+            return
         else:
             bond.failed_count = u256(int(bond.failed_count) + 1)
-        self.bonds[bond_id] = bond
+        if int(bond.observed_count) == int(bond.slot_count):
+            self._settle_complete(bond, bond_id)
+        else:
+            self._queue_observation(bond, bond_id, int(bond.observed_count))
+
+    def _expire_attempt(self, bond: Bond, bond_id: str) -> None:
+        key = self._observation_key(bond_id, int(bond.observed_count))
+        attempt = self.observations[key]
+        attempt.result = "UNVERIFIABLE_TIMEOUT"
+        # No measured timestamp/digest is invented for unavailable evidence.
+        self.observations[key] = attempt
+        bond.unverifiable_count = u256(int(bond.unverifiable_count) + 1)
+        self._pay_beneficiary(bond, bond_id, "UNVERIFIABLE", "REQUIRED_EVIDENCE_UNAVAILABLE")
+
+    def _settle_complete(self, bond: Bond, bond_id: str) -> None:
+        if int(bond.observed_count) != int(bond.slot_count):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} every committed check is required")
+        if int(bond.failed_count) > int(bond.max_failures):
+            self._pay_beneficiary(bond, bond_id, "BREACHED", "FAILURE_ALLOWANCE_EXCEEDED")
+        else:
+            self.total_met = u256(int(self.total_met) + 1)
+            self._return_to_provider(bond, bond_id, "MET", "ALL_REQUIRED_CHECKS_MET")
 
     @gl.public.write
     def finalize_bond(self, bond_id: str) -> None:
         bond = self._get_bond(bond_id)
         if bond.status != "ACTIVE":
             raise gl.vm.UserError(f"{ERROR_EXPECTED} only active bonds can be finalized")
-        if _now_unix() < self._ends_at(bond):
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} monitoring is still active")
+        if _now_unix() < int(bond.pending_deadline_unix):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} the scheduled check is still within its evidence deadline")
+        self._expire_attempt(bond, bond_id)
 
-        if int(bond.failed_count) > int(bond.max_failures):
-            self._pay_beneficiary(bond, bond_id)
-        elif int(bond.observed_count) < int(bond.min_observations):
-            self.total_inconclusive = u256(int(self.total_inconclusive) + 1)
-            self._return_to_provider(bond, bond_id, "INCONCLUSIVE", "INSUFFICIENT_OBSERVATIONS")
-        else:
-            self.total_met = u256(int(self.total_met) + 1)
-            self._return_to_provider(bond, bond_id, "MET", "SLA_MET")
-
-    def _pay_beneficiary(self, bond: Bond, bond_id: str) -> None:
+    def _pay_beneficiary(self, bond: Bond, bond_id: str, status: str, result: str) -> None:
         amount = bond.bond_atto
         settled_at = _now_unix()
-        bond.status = "BREACHED"
-        bond.result = "FAILURE_ALLOWANCE_EXCEEDED"
+        bond.status = status
+        bond.result = result
         bond.settled_at_unix = u256(settled_at)
         bond.settled_at_iso = _to_iso(settled_at)
         bond.payout_recipient = bond.beneficiary
@@ -512,7 +518,10 @@ class UptimeBond(gl.Contract):
         bond.cancellation_requested = False
         self.bonds[bond_id] = bond
         self.total_finalized = u256(int(self.total_finalized) + 1)
-        self.total_breached = u256(int(self.total_breached) + 1)
+        if status == "BREACHED":
+            self.total_breached = u256(int(self.total_breached) + 1)
+        else:
+            self.total_inconclusive = u256(int(self.total_inconclusive) + 1)
         self.total_locked_atto = u256(int(self.total_locked_atto) - int(amount))
         self.total_paid_to_beneficiaries_atto = u256(
             int(self.total_paid_to_beneficiaries_atto) + int(amount)
@@ -542,9 +551,6 @@ class UptimeBond(gl.Contract):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} bond not found: {bond_id}")
         return self.bonds[bond_id]
 
-    def _ends_at(self, bond: Bond) -> int:
-        return int(bond.starts_at_unix) + int(bond.interval_secs) * int(bond.slot_count)
-
     def _observation_key(self, bond_id: str, slot_index: int) -> str:
         return bond_id + ":" + str(slot_index)
 
@@ -560,24 +566,23 @@ class UptimeBond(gl.Contract):
             "body_bytes": str(int(observation.body_bytes)),
             "observed_at_unix": str(int(observation.observed_at_unix)),
             "observed_at_iso": observation.observed_at_iso,
-            "provenance": "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH",
+            "scheduled_at_unix": str(int(observation.scheduled_at_unix)),
+            "deadline_unix": str(int(observation.deadline_unix)),
+            "provenance": (
+                "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
+                if observation.result not in ("PENDING", "UNVERIFIABLE_TIMEOUT")
+                else "ON_CHAIN_COMMITTED_ATTEMPT"
+            ),
         }
 
     @gl.public.view
     def get_bond(self, bond_id: str) -> dict:
         bond = self._get_bond(bond_id)
         now = _now_unix()
-        ends_at = self._ends_at(bond)
-        current_slot = -1
-        current_slot_recorded = False
-        if now >= int(bond.starts_at_unix) and now < ends_at:
-            current_slot = (now - int(bond.starts_at_unix)) // int(bond.interval_secs)
-            current_slot_recorded = (
-                self._observation_key(bond_id, current_slot) in self.observations
-            )
+        current_slot = int(bond.observed_count) if bond.status == "ACTIVE" else -1
         uptime_bps = (
-            (int(bond.passed_count) * 10000) // int(bond.observed_count)
-            if int(bond.observed_count) > 0
+            (int(bond.passed_count) * 10000) // int(bond.slot_count)
+            if int(bond.slot_count) > 0
             else 0
         )
         return {
@@ -591,7 +596,7 @@ class UptimeBond(gl.Contract):
             "bond_atto": str(int(bond.bond_atto)),
             "accept_by_unix": str(int(bond.accept_by_unix)),
             "starts_at_unix": str(int(bond.starts_at_unix)),
-            "ends_at_unix": str(ends_at),
+            "ends_at_unix": str(int(bond.pending_deadline_unix)),
             "interval_secs": str(int(bond.interval_secs)),
             "slot_count": str(int(bond.slot_count)),
             "min_observations": str(int(bond.min_observations)),
@@ -613,15 +618,16 @@ class UptimeBond(gl.Contract):
             "observed_count": str(int(bond.observed_count)),
             "passed_count": str(int(bond.passed_count)),
             "failed_count": str(int(bond.failed_count)),
+            "unverifiable_count": str(int(bond.unverifiable_count)),
+            "pending_deadline_unix": str(int(bond.pending_deadline_unix)),
+            "sampling_policy": "AUTONOMOUS_FINALIZED_SELF_CALLS",
+            "evidence_risk_bearer": "PROVIDER",
+            "check_timeout_secs": str(CHECK_TIMEOUT_SECS),
             "uptime_bps": str(uptime_bps),
             "current_slot": str(current_slot),
-            "current_slot_recorded": current_slot_recorded,
-            "can_observe": (
-                bond.status == "ACTIVE"
-                and current_slot >= 0
-                and not current_slot_recorded
-            ),
-            "can_finalize": bond.status == "ACTIVE" and now >= ends_at,
+            "current_slot_recorded": False,
+            "can_observe": False,
+            "can_finalize": bond.status == "ACTIVE" and now >= int(bond.pending_deadline_unix),
             "can_expire": (
                 bond.status in ("OFFERED", "READY")
                 and now > int(bond.accept_by_unix)
@@ -704,5 +710,9 @@ class UptimeBond(gl.Contract):
             "max_page_size": str(MAX_PAGE_SIZE),
             "max_response_bytes": str(MAX_RESPONSE_BYTES),
             "probe_policy": "STRICT_INDEPENDENT_STATUS_TOKEN_SIZE_AND_SHA256",
+            "sampling_policy": "AUTONOMOUS_FINALIZED_SELF_CALLS",
+            "evidence_risk_bearer": "PROVIDER",
+            "missing_evidence_payout": "BENEFICIARY",
+            "check_timeout_secs": str(CHECK_TIMEOUT_SECS),
             "version": VERSION,
         }

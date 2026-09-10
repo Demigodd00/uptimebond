@@ -30,10 +30,8 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
   const [expectedStatus, setExpectedStatus] = useState("200");
   const [proofToken, setProofToken] = useState("uptimebond-demo-v1");
   const [acceptBy, setAcceptBy] = useState(() => localDate(6));
-  const [startsAt, setStartsAt] = useState(() => localDate(8));
-  const [intervalMinutes, setIntervalMinutes] = useState("3");
   const [slotCount, setSlotCount] = useState("3");
-  const [minObservations, setMinObservations] = useState("2");
+  const [riskAccepted, setRiskAccepted] = useState(false);
   const [maxFailures, setMaxFailures] = useState("0");
   const [bondAmount, setBondAmount] = useState("0.001");
   const [reviewing, setReviewing] = useState(false);
@@ -48,11 +46,9 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
 
   const numbers = useMemo(() => ({
     expectedStatus: Number(expectedStatus),
-    intervalMinutes: Number(intervalMinutes),
     slotCount: Number(slotCount),
-    minObservations: Number(minObservations),
     maxFailures: Number(maxFailures),
-  }), [expectedStatus, intervalMinutes, slotCount, minObservations, maxFailures]);
+  }), [expectedStatus, slotCount, maxFailures]);
 
   function validate(): string {
     if (!serviceName.trim() || serviceName.trim().length > 80) return "Name the service in no more than 80 characters.";
@@ -63,14 +59,9 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
     if (!isProofToken(proofToken)) return "Use an 8–96 character proof token containing letters, numbers, dots, colons, slashes, underscores, or hyphens.";
     if (bondAtto < 10n ** 15n || bondAtto > 10n * 10n ** 18n) return "Choose a test bond between 0.001 and 10 GEN.";
     const acceptAt = new Date(acceptBy).getTime();
-    const startAt = new Date(startsAt).getTime();
     if (!Number.isFinite(acceptAt) || acceptAt < Date.now() + 2 * 60_000) return "Set acceptance at least two minutes from now.";
-    if (!Number.isFinite(startAt) || startAt < acceptAt + 60_000) return "Start monitoring at least one minute after acceptance closes.";
-    if (!Number.isInteger(numbers.intervalMinutes) || numbers.intervalMinutes < 1 || numbers.intervalMinutes > 1440) return "Choose a check interval from 1 to 1,440 minutes.";
-    if (!Number.isInteger(numbers.slotCount) || numbers.slotCount < 2 || numbers.slotCount > 12) return "Choose between 2 and 12 monitoring slots.";
-    if (!Number.isInteger(numbers.minObservations) || numbers.minObservations < 1 || numbers.minObservations > numbers.slotCount) return "Minimum observations must be between 1 and the number of slots.";
-    if (!Number.isInteger(numbers.maxFailures) || numbers.maxFailures < 0 || numbers.maxFailures >= numbers.minObservations) return "Allowed failures must be lower than minimum observations.";
-    if (numbers.intervalMinutes * 60 * numbers.slotCount > 7 * 24 * 60 * 60) return "Monitoring cannot exceed seven days.";
+    if (!Number.isInteger(numbers.slotCount) || numbers.slotCount < 2 || numbers.slotCount > 12) return "Choose between 2 and 12 automatic checks.";
+    if (!Number.isInteger(numbers.maxFailures) || numbers.maxFailures < 0 || numbers.maxFailures >= numbers.slotCount) return "Allowed failures must be lower than the required check count.";
     return "";
   }
 
@@ -86,6 +77,7 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
     if (!CONTRACT_READY) { setError("Transactions are unavailable in preview mode."); return; }
     const nextError = validate();
     if (nextError) { setError(nextError); return; }
+    if (!riskAccepted) { setError("Acknowledge the evidence-risk terms before locking the bond."); return; }
     setError("");
     try {
       await createBond(session, {
@@ -95,10 +87,7 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
         expectedStatus: numbers.expectedStatus,
         proofToken: proofToken.trim(),
         acceptByUnix: Math.floor(new Date(acceptBy).getTime() / 1000),
-        startsAtUnix: Math.floor(new Date(startsAt).getTime() / 1000),
-        intervalSecs: numbers.intervalMinutes * 60,
         slotCount: numbers.slotCount,
-        minObservations: numbers.minObservations,
         maxFailures: numbers.maxFailures,
         bondAtto,
       }, setProgress);
@@ -141,12 +130,12 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
         </button>
         <div className="mini-rule"><span>01</span><p>Provider locks the test bond.</p></div>
         <div className="mini-rule"><span>02</span><p>Beneficiary accepts verified terms.</p></div>
-        <div className="mini-rule"><span>03</span><p>Validators record fixed-slot checks.</p></div>
+        <div className="mini-rule"><span>03</span><p>Checks run automatically after acceptance.</p></div>
       </aside>
 
       <div className="form-card">
         <div className="form-heading">
-          <div><p className="eyebrow">{reviewing ? "Final review" : "New performance bond"}</p><h1>{reviewing ? "Lock these terms?" : "Define the uptime promise."}</h1></div>
+          <div><p className="eyebrow">{reviewing ? "Final review" : "New performance bond"}</p><h1>{reviewing ? "Lock these terms?" : "Define the health-check bond."}</h1></div>
           <span>{reviewing ? "02 / 02" : "01 / 02"}</span>
         </div>
         {reviewing ? (
@@ -156,12 +145,13 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
               <div><dt>Bond</dt><dd>{formatGen(bondAtto)} test GEN</dd></div>
               <div><dt>Beneficiary</dt><dd className="mono">{beneficiary}</dd></div>
               <div><dt>Healthy response</dt><dd>HTTP {expectedStatus} + token</dd></div>
-              <div><dt>Monitoring</dt><dd>{slotCount} slots · every {intervalMinutes}m</dd></div>
-              <div><dt>Evidence threshold</dt><dd>{minObservations} observations minimum</dd></div>
+              <div><dt>Checks</dt><dd>{slotCount} automatic consensus checkpoints</dd></div>
+              <div><dt>Evidence threshold</dt><dd>Every check is required</dd></div>
               <div><dt>Failure allowance</dt><dd>{maxFailures}</dd></div>
             </dl>
-            <div className="terms-note"><strong>Immutable after confirmation</strong><span>Readiness must pass before the beneficiary can accept.</span></div>
-            <div className="form-actions"><button className="button button-secondary" onClick={() => setReviewing(false)} disabled={busy}>Edit terms</button><button className="button button-primary" onClick={() => void submit()} disabled={busy}>{CONTRACT_READY ? "Lock test bond" : "Preview only"}</button></div>
+            <div className="terms-note"><strong>Provider bears evidence risk</strong><span>After acceptance, missing or unverifiable evidence pays the beneficiary. There is no cancellation or manual retry. Each queued check has a five-minute evidence deadline.</span></div>
+            <label className="risk-consent"><input type="checkbox" checked={riskAccepted} onChange={(event) => setRiskAccepted(event.target.checked)} disabled={busy} /><span>I accept that network delays, inconsistent responses, or unavailable evidence can forfeit the full test bond.</span></label>
+            <div className="form-actions"><button className="button button-secondary" onClick={() => setReviewing(false)} disabled={busy}>Edit terms</button><button className="button button-primary" onClick={() => void submit()} disabled={busy || !riskAccepted}>{CONTRACT_READY ? "Lock test bond" : "Preview only"}</button></div>
           </div>
         ) : (
           <div className="form-stack">
@@ -177,12 +167,10 @@ export default function CreateBond({ session, onCreated }: { session: WalletSess
             </div>
             <div className="field-row">
               <label><span>Accept by</span><input type="datetime-local" value={acceptBy} onChange={(event) => setAcceptBy(event.target.value)} /></label>
-              <label><span>Monitoring starts</span><input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
+              <div className="terms-note"><strong>Starts on acceptance</strong><span>Network finality drives check timing. Not fixed-interval or continuous monitoring.</span></div>
             </div>
-            <div className="field-row field-row-four">
-              <label><span>Interval (minutes)</span><input inputMode="numeric" value={intervalMinutes} onChange={(event) => setIntervalMinutes(event.target.value)} /></label>
-              <label><span>Slots</span><input inputMode="numeric" value={slotCount} onChange={(event) => setSlotCount(event.target.value)} /></label>
-              <label><span>Minimum checks</span><input inputMode="numeric" value={minObservations} onChange={(event) => setMinObservations(event.target.value)} /></label>
+            <div className="field-row">
+              <label><span>Required checks (2–12)</span><input inputMode="numeric" value={slotCount} onChange={(event) => setSlotCount(event.target.value)} /></label>
               <label><span>Allowed failures</span><input inputMode="numeric" value={maxFailures} onChange={(event) => setMaxFailures(event.target.value)} /></label>
             </div>
             <button className="button button-primary button-wide" type="button" onClick={openReview}>Review bond</button>

@@ -22,6 +22,7 @@ import requests
 from eth_account import Account
 from genlayer_py.assertions import tx_execution_succeeded
 from genlayer_py.chains import studionet
+from genlayer_py.types import TransactionHashVariant
 from genlayer_py.client.genlayer_client import GenLayerClient
 from web3 import Web3
 from web3.logs import DISCARD
@@ -62,6 +63,14 @@ def load_saved_signer() -> str:
         values[key.strip()] = value.strip().strip('"').strip("'")
     if values.get("UPTIMEBOND_PRIVATE_KEY"):
         return values["UPTIMEBOND_PRIVATE_KEY"]
+    # Earlier releases used the same saved wallet under the first app's name.
+    # Reuse it only when its derived public address exactly matches this
+    # product's recorded deployer; never silently choose a different wallet.
+    legacy = values.get("STREAKPACT_PRIVATE_KEY", "")
+    if legacy and DEPLOYMENT_PATH.exists():
+        recorded = json.loads(DEPLOYMENT_PATH.read_text(encoding="utf-8"))
+        if Account.from_key(legacy).address.lower() == str(recorded.get("deployer", "")).lower():
+            return legacy
     raise RuntimeError("The saved StudioNet signer was not found")
 
 
@@ -114,8 +123,17 @@ class Acceptance:
         if RECORD_PATH.exists():
             self.record = json.loads(RECORD_PATH.read_text(encoding="utf-8"))
             if self.record.get("contract", "").lower() != self.address.lower():
-                raise RuntimeError("Existing acceptance record belongs to another deployment")
+                history = RECORD_PATH.parent / "history"
+                history.mkdir(exist_ok=True)
+                archived = history / f"uptime_bond_acceptance_{self.record['contract'][2:].lower()}.json"
+                if archived.exists() and json.loads(archived.read_text(encoding="utf-8")) != self.record:
+                    raise RuntimeError("Existing acceptance history differs; refusing to overwrite")
+                if not archived.exists():
+                    archived.write_text(json.dumps(self.record, indent=2) + "\n", encoding="utf-8")
+                self.record = None
         else:
+            self.record = None
+        if self.record is None:
             self.record = {
                 "network": "studionet",
                 "contract": self.address,
@@ -201,6 +219,7 @@ class Acceptance:
                     address=self.address,
                     function_name=method,
                     args=args,
+                    transaction_hash_variant=TransactionHashVariant.LATEST_FINAL,
                 )
             except Exception as error:
                 last_error = error
@@ -219,7 +238,10 @@ class Acceptance:
             "max_page_size": "25",
             "max_response_bytes": "16000",
             "probe_policy": "STRICT_INDEPENDENT_STATUS_TOKEN_SIZE_AND_SHA256",
-            "version": "0.1.0-studionet",
+            "version": "0.2.0-studionet",
+            "sampling_policy": "AUTONOMOUS_FINALIZED_SELF_CALLS",
+            "missing_evidence_payout": "BENEFICIARY",
+            "check_timeout_secs": "300",
         }
         if any(stats.get(key) != value for key, value in expected.items()):
             raise RuntimeError("The exact-release configuration is not active")
@@ -365,27 +387,18 @@ class Acceptance:
             raise RuntimeError(f"Could not uniquely identify acceptance bond: {service_name}")
         return matches[0]["id"]
 
-    def create(self, key: str, service_name: str, *, accept_lead: int, start_lead: int) -> str:
+    def create(self, key: str, service_name: str, *, endpoint: str = ENDPOINT) -> str:
         step = f"create-{key}"
         existing = self.record["transactions"].get(step)
         args = existing["args"] if existing else [
-            service_name,
-            ENDPOINT,
-            self.accounts["beneficiary"].address,
-            200,
-            PROOF_TOKEN,
-            int(time.time()) + accept_lead,
-            int(time.time()) + start_lead,
-            120,
-            2,
-            2,
-            0,
+            service_name, endpoint, self.accounts["beneficiary"].address,
+            200, PROOF_TOKEN, int(time.time()) + 1200, 2, 0,
         ]
         self.write(step, "create_bond", args, value=STAKE)
         if key not in self.record["bonds"]:
             self.record["bonds"][key] = self.find_bond(service_name)
             self.save()
-        output({"bond": key, "id": self.record["bonds"][key], "starts_at_unix": args[6]})
+        output({"bond": key, "id": self.record["bonds"][key]})
         return self.record["bonds"][key]
 
     def wait_until(self, unix: int, reason: str) -> None:
@@ -394,13 +407,18 @@ class Acceptance:
             output({"waiting_for": reason, "seconds_remaining": round(remaining)})
             time.sleep(min(30, max(1, remaining + 1)))
 
-    def verify_transfer(self, step: str, recipient: str, value: int) -> None:
-        entry = self.record["transactions"][step]
-        receipt = self.rpc("eth_getTransactionByHash", [entry["transaction_hash"]])["result"]
+    def verify_transfer(self, step: str, recipient: str, value: int, parent_hash: str | None = None) -> None:
+        parent_hash = parent_hash or self.record["transactions"][step]["transaction_hash"]
+        receipt = self.rpc("eth_getTransactionByHash", [parent_hash])["result"]
         children = receipt.get("triggered_transactions", [])
         if len(children) != 1:
             raise AssertionError(f"{step}: expected exactly one native transfer")
-        child = self.rpc("eth_getTransactionByHash", [children[0]])["result"]
+        child = None
+        for _ in range(24):
+            child = self.rpc("eth_getTransactionByHash", [children[0]])["result"]
+            if child and child.get("status") == "FINALIZED":
+                break
+            time.sleep(5)
         if not child or child.get("status") != "FINALIZED" or child.get("value_credited") is not True:
             raise AssertionError(f"{step}: native transfer did not finalize and credit")
         if child.get("to_address", "").lower() != recipient.lower() or int(child.get("value", 0)) != value:
@@ -416,157 +434,141 @@ class Acceptance:
         self.save()
         output({"transfer": step, "passed": True, "recipient": recipient, "value_atto": str(value)})
 
+    def follow_checks(self, key: str, bond_id: str, expected_status: str) -> dict:
+        """Follow actual child hashes. An unfinalized child is never a success."""
+        timeout = self.record["transactions"].get(f"timeout-{key}", {})
+        if timeout.get("checked") and timeout.get("execution_succeeded"):
+            self.verify_transfer(f"timeout-{key}", self.accounts["beneficiary"].address, STAKE)
+            return self.finish_case(key, bond_id, expected_status)
+        acceptance_hash = self.record["transactions"][f"accept-{key}"]["transaction_hash"]
+        parent_hash = acceptance_hash
+        checks = []
+        deadline = time.monotonic() + 900
+        while time.monotonic() < deadline:
+            parent = self.rpc("eth_getTransactionByHash", [parent_hash])["result"]
+            children = parent.get("triggered_transactions", []) if parent else []
+            if len(children) != 1:
+                raise AssertionError(f"{key}: expected exactly one finalized self-call")
+            child_hash = children[0]
+            child = self.rpc("eth_getTransactionByHash", [child_hash])["result"]
+            state = self.read("get_bond", [bond_id])
+            if child and child.get("status") == "FINALIZED" and tx_execution_succeeded(child):
+                if child.get("from_address", "").lower() != self.address.lower():
+                    raise AssertionError(f"{key}: check was not dispatched by the contract")
+                if child.get("to_address", "").lower() != self.address.lower():
+                    raise AssertionError(f"{key}: check targeted a different contract")
+                checks.append({
+                    "parent_transaction": parent_hash, "transaction_hash": child_hash,
+                    "sender": child["from_address"], "recipient": child["to_address"],
+                    "status": "FINALIZED", "execution_succeeded": True,
+                    "triggered_transactions": child.get("triggered_transactions", []),
+                })
+                self.record.setdefault("autonomous_checks", {})[key] = checks
+                self.save()
+                # Final state can already include later children. Traverse the
+                # complete child chain until this child's next message is payout.
+                next_hashes = child.get("triggered_transactions", [])
+                next_child = self.rpc("eth_getTransactionByHash", [next_hashes[0]])["result"] if len(next_hashes) == 1 else None
+                if next_child and next_child.get("to_address", "").lower() != self.address.lower():
+                    recipient = self.accounts["provider" if expected_status == "MET" else "beneficiary"].address
+                    self.verify_transfer(f"payout-{key}", recipient, STAKE, child_hash)
+                    break
+                parent_hash = child_hash
+                continue
+            if state["status"] == "ACTIVE" and int(time.time()) >= int(state["pending_deadline_unix"]) + 2:
+                if expected_status != "UNVERIFIABLE":
+                    raise AssertionError(f"{key}: healthy or breach check stalled: {child_hash}")
+                self.record.setdefault("unverifiable_attempts", {})[key] = {
+                    "parent_transaction": parent_hash, "child_transaction": child_hash,
+                    "child_status_at_timeout": child.get("status") if child else "NOT_FOUND",
+                    "child_execution_succeeded": bool(child and tx_execution_succeeded(child)),
+                    "committed_state": state,
+                    "observations_before_timeout": self.read("get_observations", [bond_id]),
+                    "checked_at": timestamp(),
+                }
+                self.save()
+                # Even the provider cannot benefit by settling the missing check.
+                self.write(f"timeout-{key}", "finalize_bond", [bond_id], role="provider")
+                self.verify_transfer(f"timeout-{key}", self.accounts["beneficiary"].address, STAKE)
+                break
+            if state["status"] != "ACTIVE":
+                raise AssertionError(f"{key}: terminal state without a verified payout path")
+            time.sleep(8)
+        else:
+            raise RuntimeError(f"{key}: unresolved child; resume known hashes, never retry the check")
+        return self.finish_case(key, bond_id, expected_status)
+
+    def finish_case(self, key: str, bond_id: str, expected_status: str) -> dict:
+        result = self.read("get_bond", [bond_id])
+        recipient = self.accounts["provider" if expected_status == "MET" else "beneficiary"].address
+        self.assert_fields(f"{key}-settled", result, {
+            "status": expected_status, "payout_recipient": recipient, "payout_atto": str(STAKE),
+        })
+        observations = self.read("get_observations", [bond_id])
+        self.record["assertions"][f"{key}-observations"] = {
+            "checked_at": timestamp(), "observed": observations,
+        }
+        self.save()
+        return result
+
     def run(self) -> None:
         self.preflight()
         suffix = self.deployment["source_sha256"][:10]
-
-        cancellation_name = f"UptimeBond cancellation acceptance {suffix}"
-        cancellation_id = self.create(
-            "cancellation",
-            cancellation_name,
-            accept_lead=300,
-            start_lead=420,
-        )
-        self.write(
-            "reject-observer-cancel",
-            "cancel_offer",
-            [cancellation_id],
-            role="observer",
-            expected_error="only the provider can cancel",
-        )
+        cancellation_id = self.create("cancellation", f"UptimeBond cancelled offer {suffix}")
+        self.write("reject-observer-cancel", "cancel_offer", [cancellation_id],
+                   role="observer", expected_error="only the provider can cancel")
         self.write("cancel-offer", "cancel_offer", [cancellation_id])
-        self.assert_fields(
-            "cancellation-refunded",
-            self.read("get_bond", [cancellation_id]),
-            {
-                "status": "CANCELLED",
-                "result": "PROVIDER_CANCELLED",
-                "payout_recipient": self.accounts["provider"].address,
-                "payout_atto": str(STAKE),
-            },
-        )
+        self.assert_fields("cancellation-refunded", self.read("get_bond", [cancellation_id]), {
+            "status": "CANCELLED", "payout_recipient": self.accounts["provider"].address,
+            "payout_atto": str(STAKE),
+        })
         self.verify_transfer("cancel-offer", self.accounts["provider"].address, STAKE)
 
-        lifecycle_name = f"UptimeBond monitored acceptance {suffix}"
-        lifecycle_id = self.create(
-            "lifecycle",
-            lifecycle_name,
-            accept_lead=360,
-            start_lead=480,
-        )
-        lifecycle_args = self.record["transactions"]["create-lifecycle"]["args"]
-        starts_at = int(lifecycle_args[6])
-        ends_at = starts_at + int(lifecycle_args[7]) * int(lifecycle_args[8])
-
-        self.write(
-            "reject-observer-readiness",
-            "verify_readiness",
-            [lifecycle_id],
-            role="observer",
-            expected_error="only the provider can verify readiness",
-        )
-        self.write("verify-readiness", "verify_readiness", [lifecycle_id])
-        ready = self.assert_fields(
-            "readiness-proven",
-            self.read("get_bond", [lifecycle_id]),
-            {"status": "READY"},
-        )
-        if (
-            ready.get("readiness", {}).get("exists") is not True
-            or ready["readiness"].get("http_status") != "200"
-            or re.fullmatch(r"[0-9a-f]{64}", str(ready["readiness"].get("body_digest", ""))) is None
-            or ready["readiness"].get("provenance") != "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
-        ):
-            raise AssertionError("Readiness provenance is incomplete")
-
-        self.write(
-            "reject-provider-accept",
-            "accept_bond",
-            [lifecycle_id],
-            expected_error="only the beneficiary can accept",
-        )
-        self.write("accept-bond", "accept_bond", [lifecycle_id], role="beneficiary")
-        self.assert_fields(
-            "lifecycle-active",
-            self.read("get_bond", [lifecycle_id]),
-            {"status": "ACTIVE", "payout_recipient": "", "payout_atto": "0"},
-        )
-
-        if time.time() < starts_at:
-            self.write(
-                "reject-early-observation",
-                "record_observation",
-                [lifecycle_id],
-                role="observer",
-                expected_error="monitoring has not started",
-            )
-        self.wait_until(starts_at + 2, "first monitoring slot")
-        self.write("record-slot-0", "record_observation", [lifecycle_id], role="observer")
-
-        self.wait_until(starts_at + int(lifecycle_args[7]) + 2, "second monitoring slot")
-        self.write("record-slot-1", "record_observation", [lifecycle_id], role="beneficiary")
-        observations = self.read("get_observations", [lifecycle_id])
-        if observations.get("total") != "2":
-            raise AssertionError("Exact release did not retain both monitoring observations")
-        if [item.get("slot_index") for item in observations["items"]] != ["0", "1"]:
-            raise AssertionError("Monitoring observations were not stored in fixed slot order")
-        for item in observations["items"]:
-            if (
-                item.get("result") != "PASS"
-                or item.get("http_status") != "200"
-                or item.get("token_present") is not True
-                or item.get("body_within_limit") is not True
-                or re.fullmatch(r"[0-9a-f]{64}", str(item.get("body_digest", ""))) is None
-                or item.get("provenance") != "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
-            ):
-                raise AssertionError("An observation is missing strict validator provenance")
-        self.record["assertions"]["validator-observations"] = {
-            "checked_at": timestamp(),
-            "expected": {"total": "2", "results": ["PASS", "PASS"]},
-            "observed": observations,
-        }
-        self.save()
-
-        self.wait_until(ends_at + 2, "monitoring end")
-        self.write("finalize-bond", "finalize_bond", [lifecycle_id], role="observer")
-        settled = self.assert_fields(
-            "lifecycle-met",
-            self.read("get_bond", [lifecycle_id]),
-            {
-                "status": "MET",
-                "result": "SLA_MET",
-                "observed_count": "2",
-                "passed_count": "2",
-                "failed_count": "0",
-                "uptime_bps": "10000",
-                "payout_recipient": self.accounts["provider"].address,
-                "payout_atto": str(STAKE),
-            },
-        )
-        self.verify_transfer("finalize-bond", self.accounts["provider"].address, STAKE)
+        for key, status in (("lifecycle", "MET"), ("breach", "BREACHED"), ("variance", "UNVERIFIABLE")):
+            # The public, stateless fixture changes only after the timestamp
+            # committed in its URL. No production control or privileged setter.
+            existing = self.record["transactions"].get(f"create-{key}")
+            if key == "lifecycle":
+                endpoint = ENDPOINT
+            elif existing:
+                endpoint = existing["args"][1]
+            else:
+                switch_at = int(time.time()) + 240
+                endpoint = f"https://uptimebond-psi.vercel.app/api/review-health?case={key}&switch_at={switch_at}"
+            bond_id = self.create(key, f"UptimeBond {key} fairness proof {suffix}", endpoint=endpoint)
+            self.write(f"ready-{key}", "verify_readiness", [bond_id])
+            if key == "lifecycle":
+                ready = self.read("get_bond", [bond_id])
+                self.assert_fields("readiness-proven", ready, {"status": "READY"})
+                self.write("reject-provider-accept", "accept_bond", [bond_id],
+                           expected_error="only the beneficiary can accept")
+            else:
+                from urllib.parse import parse_qs, urlparse
+                switch_at = int(parse_qs(urlparse(endpoint).query)["switch_at"][0])
+                self.wait_until(switch_at + 2, f"{key} public fixture transition")
+            self.write(f"accept-{key}", "accept_bond", [bond_id], role="beneficiary")
+            for role in ("provider", "beneficiary", "observer"):
+                self.write(f"reject-manual-{key}-{role}", "record_observation", [bond_id, 0],
+                           role=role, expected_error="only the contract can execute scheduled checks")
+            settled = self.follow_checks(key, bond_id, status)
+            self.write(f"reject-repeat-settlement-{key}", "finalize_bond", [bond_id],
+                       expected_error="only active bonds can be finalized")
+            self.record.setdefault("review_bonds", {})[key] = {
+                "id": bond_id, "status": settled["status"], "endpoint": settled["endpoint_url"],
+            }
+            self.save()
 
         stats = self.read("get_stats", [])
-        if (
-            int(stats["total_created"]) < 2
-            or int(stats["total_finalized"]) < 2
-            or int(stats["total_met"]) < 1
-            or stats["total_locked_atto"] != "0"
-            or stats["admin_controls"] is not False
-            or stats["fee_bps"] != "0"
-        ):
-            raise AssertionError("Final protocol accounting did not match the acceptance lifecycle")
+        if stats["total_locked_atto"] != "0" or stats["fee_bps"] != "0" or stats["admin_controls"]:
+            raise AssertionError("Final protocol accounting is not settled and fee-free")
+        if int(stats["total_met"]) < 1 or int(stats["total_breached"]) < 1 or int(stats["total_inconclusive"]) < 1:
+            raise AssertionError("The three fairness outcomes were not demonstrated")
         self.record["final_stats"] = stats
-        self.record["review_bond"] = {
-            "id": lifecycle_id,
-            "status": settled["status"],
-            "endpoint": settled["endpoint_url"],
-            "readiness_digest": settled["readiness"]["body_digest"],
-            "observation_count": observations["total"],
-        }
+        self.record["review_bond"] = self.record["review_bonds"]["lifecycle"]
         self.record["completed_at"] = timestamp()
         self.record["result"] = "PASS"
         self.save()
-        output({"result": "PASS", "contract": self.address, "review_bond": lifecycle_id})
+        output({"result": "PASS", "contract": self.address, "review_bonds": self.record["review_bonds"]})
 
 
 if __name__ == "__main__":

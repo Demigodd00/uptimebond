@@ -1,64 +1,54 @@
-# UptimeBond architecture
+# UptimeBond 0.2 architecture
 
-## Product boundary
+The Intelligent Contract owns immutable offer terms, readiness, queued attempts,
+independent validator comparison, eligibility, evidence risk, and payout.
+The frontend owns wallet connection, forms, read-only polling, and transaction
+progress. It cannot fabricate a result, schedule a check, or choose a payout.
 
-UptimeBond is a StudioNet performance-bond protocol for public HTTP health endpoints. A service provider locks valueless test GEN for a named beneficiary. GenLayer validators independently fetch the immutable endpoint during fixed monitoring slots, require exact agreement on a normalized probe result, and the Intelligent Contract returns or awards the bond when monitoring ends.
+## Execution sequence
 
-The frontend owns wallet connection, forms, non-authoritative previews, transaction progress, and convenient indexing. It never decides whether a service passed.
+1. Provider creates a payable offer; status OFFERED.
+2. Provider readiness fetch passes strict independent validation; status READY.
+3. Beneficiary accepts before the deadline; status ACTIVE. Parent state records
+   check 0 PENDING with a five-minute evidence deadline and emits a self-call.
+4. After parent finalization, the contract executes that child. The only permitted
+   immediate sender is the contract address, not the transaction origin.
+5. Each finalized child stores its response and commits/queues the next child.
+   All 2–12 checks are required; no public retry or clock-slot selection exists.
+6. Complete evidence within allowance returns the bond (MET). Excess observed
+   failures pay the beneficiary (BREACHED). Canonical fetch unavailability pays
+   the beneficiary (UNVERIFIABLE). A missing/rolled-back/disputed child leaves
+   its parent's PENDING record intact. After its deadline any wallet can finalize
+   UNVERIFIABLE, paying the beneficiary.
+7. Accounting and terminal state precede a single native transfer emitted on
+   finalization. Duplicate writes cannot cause duplicate payouts.
 
-The Intelligent Contract owns the offer terms, readiness proof, fixed monitoring schedule, observation records, strict validator comparison, cancellation rules, locked-value accounting, and final payout.
+## State transitions
 
-The monitored service owns the raw public health response. UptimeBond supports deliberately static UTF-8 health responses: an exact HTTP status and required proof token are checked, while the response bytes are fingerprinted for provenance. Network-level fetch failures do not become service failures; the transaction can be retried, and an insufficient-evidence terminal path prevents permanent lockup.
+OFFERED -> READY -> ACTIVE -> MET / BREACHED / UNVERIFIABLE.
+OFFERED or READY -> CANCELLED / DECLINED / EXPIRED (provider refund).
+There is no active cancellation.
 
-## Consequential path
+## Evidence and consensus
 
-1. Provider creates a payable offer naming a beneficiary and locks test GEN.
-2. Provider configures the public HTTPS health endpoint with the agreed token.
-3. Provider asks validators to verify readiness. Exact consensus on status, token presence, response size, and SHA-256 fingerprint moves the offer to `READY`.
-4. Beneficiary accepts before the immutable acceptance deadline, moving it to `ACTIVE`.
-5. During each fixed slot, any account may request one observation. Validators independently refetch the endpoint and strict consensus stores one append-only record for that slot.
-6. After monitoring ends, anyone may finalize:
-   - failures above the agreed allowance: `BREACHED`, bond paid to beneficiary;
-   - enough observations and failures within allowance: `MET`, bond returned to provider;
-   - too few observations: `INCONCLUSIVE`, bond returned to provider.
-7. Every value-moving terminal state is applied before its transfer is emitted, so the same bond cannot pay twice.
+Each received response is independently fetched by leader and validators.
+Exact agreement covers HTTP status, status match, token presence, size validity,
+full-body SHA-256 and byte count, and derived result. No LLM is used.
 
-## State machine
+A PENDING or UNVERIFIABLE_TIMEOUT record contains committed scheduling and deadline
+facts, not an invented response hash or HTTP status. Transport exceptions produce
+a canonical UNVERIFIABLE_FETCH record. Missing evidence is an agreed allocation
+of evidence risk, not proof of downtime.
 
-```text
-OFFERED -> READY -> ACTIVE -> MET
-    |        |         |----> BREACHED
-    |        |         |----> INCONCLUSIVE
-    |        |         `----> CANCELLED (mutual)
-    |        |----> DECLINED
-    |        `----> EXPIRED
-    `-------------> CANCELLED (provider, before acceptance)
-```
+## Timing and trust
 
-## Consensus rule
+This is a finite series of finality-driven checkpoints. It is not fixed wall-clock
+sampling, continuous uptime, random sampling, or censorship-resistant scheduling.
+Acceptance starts the sequence; participant wallets cannot choose later probes.
+Network consensus scheduling determines when the actual independent fetches occur.
+Providers accept infrastructure and evidence-availability risk.
 
-UptimeBond does not use an LLM. The probe result is structured and canonical, so a custom validator independently repeats the fetch and compares every decision field exactly. Validators must agree on:
-
-- HTTP status;
-- whether it equals the expected status;
-- whether the required proof token exists in the UTF-8 body;
-- response-size validity;
-- SHA-256 digest of the complete response bytes; and
-- the derived `PASS` or failure code.
-
-The digest requirement intentionally means dynamic health pages are unsupported. This makes the observation reproducible and the evidence receipt reviewable.
-
-## Fairness and recovery
-
-- The provider cannot withdraw after beneficiary acceptance.
-- The beneficiary cannot create an outage result; validators fetch the endpoint themselves.
-- Neither party chooses the monitoring slot; it is derived from contract time.
-- Each slot can be recorded only once.
-- Received non-matching HTTP responses count as failures. A validator transport/runtime failure does not write an observation.
-- Missing observations are not silently called uptime. They produce an explicit `INCONCLUSIVE` result and return the performance bond to the provider.
-- Active cancellation requires matching consent from both participants.
-- Offers can always be cancelled or expired before acceptance, and active bonds can always be finalized after the monitoring end.
-
-## StudioNet scope
-
-This release uses valueless StudioNet test GEN. It measures only public HTTPS application-level availability and a static response token. It does not claim global uptime, latency, legal SLA enforcement, private-network reachability, or production insurance coverage.
+The public /api/demo-health fixture is stable. /api/review-health is a stateless,
+clearly named adversarial fixture: its URL commits a transition timestamp and
+either an HTTP 503 case or varying body bytes. Neither fixture is an oracle input
+controlled by a privileged contract administrator.

@@ -18,8 +18,8 @@ export default function UptimeBondApp() {
         <div className="hero-monitor" aria-label="Illustrative uptime monitor">
           <div className="monitor-glow" />
           <div className="monitor-card">
-            <div className="monitor-top"><span><i /> API GATEWAY</span><small>UB-24</small></div>
-            <div className="uptime-number"><strong>99.9</strong><span>%</span></div>
+            <div className="monitor-top"><span><i /> EXAMPLE CHECKS</span><small>ILLUSTRATION</small></div>
+            <div className="uptime-number"><strong>11</strong><span>/ 12</span></div>
             <div className="pulse-chart" aria-hidden="true">
               <svg viewBox="0 0 520 150" preserveAspectRatio="none">
                 <path className="grid-line" d="M0 30H520M0 75H520M0 120H520" />
@@ -34,7 +34,7 @@ export default function UptimeBondApp() {
         </div>
       </section>
       <section className="trust-strip" aria-label="Protocol properties">
-        <div><span>01</span><strong>Fixed check slots</strong></div>
+        <div><span>01</span><strong>Automatic validator checks</strong></div>
         <div><span>02</span><strong>Exact evidence consensus</strong></div>
         <div><span>03</span><strong>No admin settlement</strong></div>
       </section>

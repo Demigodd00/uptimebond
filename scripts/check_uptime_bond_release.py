@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -27,7 +28,7 @@ WEB_PATH = ROOT / "apps" / "uptimebond-web"
 RPC_URL = "https://studio.genlayer.com/api"
 ADDRESS_PATTERN = re.compile(r"^0x[0-9a-fA-F]{40}$")
 DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-EXPECTED_ADDRESS = "0x308966Eb38b57798e614E3f4B4D4011C6F84367a"
+EXPECTED_ADDRESS = "0xF5E1027a28439716455F7b1778Aca17855346B87"
 EXPECTED_FIXTURE_DIGEST = "846a670e1f1e66ec7e7c8e9409f966d3d0b805faaac34717a3c8da0fdc6f323d"
 
 
@@ -84,98 +85,67 @@ def verify_records() -> tuple[bool, dict | None, dict | None]:
     address = str(deployment.get("address", ""))
     transactions = acceptance.get("transactions", {})
     assertions = acceptance.get("assertions", {})
-    observations = assertions.get("validator-observations", {}).get("observed", {})
-    observation_items = observations.get("items", []) if isinstance(observations, dict) else []
-    readiness = assertions.get("readiness-proven", {}).get("observed", {}).get("readiness", {})
-    cancellation = assertions.get("cancellation-refunded", {}).get("observed", {})
-    settled = assertions.get("lifecycle-met", {}).get("observed", {})
     transfer_checks = acceptance.get("transfer_checks", {})
-    required_steps = {
-        "create-cancellation",
-        "reject-observer-cancel",
-        "cancel-offer",
-        "create-lifecycle",
-        "reject-observer-readiness",
-        "verify-readiness",
-        "reject-provider-accept",
-        "accept-bond",
-        "reject-early-observation",
-        "record-slot-0",
-        "record-slot-1",
-        "finalize-bond",
-    }
-    rejected_steps = {
-        "reject-observer-cancel",
-        "reject-observer-readiness",
-        "reject-provider-accept",
-        "reject-early-observation",
-    }
-    positive_steps = required_steps - rejected_steps
+    autonomous = acceptance.get("autonomous_checks", {})
+    required_steps = {"create-cancellation", "reject-observer-cancel", "cancel-offer", "reject-provider-accept"}
+    for case in ("lifecycle", "breach", "variance"):
+        required_steps.update({f"create-{case}", f"ready-{case}", f"accept-{case}", f"reject-repeat-settlement-{case}"})
+        required_steps.update(f"reject-manual-{case}-{role}" for role in ("provider", "beneficiary", "observer"))
     checks = {
-        "contract identity": deployment.get("contract") == "UptimeBond",
-        "StudioNet network": deployment.get("network") == "studionet",
-        "canonical address": address.lower() == EXPECTED_ADDRESS.lower()
-        and ADDRESS_PATTERN.fullmatch(address) is not None,
+        "contract identity and StudioNet release": deployment.get("contract") == "UptimeBond"
+        and deployment.get("network") == "studionet" and deployment.get("version") == "0.2.0-studionet",
+        "canonical address": address == EXPECTED_ADDRESS and ADDRESS_PATTERN.fullmatch(address) is not None,
         "validated source digest": deployment.get("source_sha256") == source_digest(),
-        "preflight was mandatory": deployment.get("preflight_skipped") is False,
-        "deployment execution succeeded": deployment.get("receipt_status") == "FINALIZED"
-        and deployment.get("execution_result") == "SUCCESS",
-        "deployed source and config verified": deployment.get("verified_source_and_config") is True,
-        "pinned runner": str(deployment.get("runner_dependency", "")).startswith(
-            '# { "Depends": "py-genlayer:'
-        )
-        and "latest" not in str(deployment.get("runner_dependency", ""))
-        and "test" not in str(deployment.get("runner_dependency", "")),
+        "mandatory preflight and successful deployment": deployment.get("preflight_skipped") is False
+        and deployment.get("receipt_status") == "FINALIZED" and deployment.get("execution_result") == "SUCCESS"
+        and deployment.get("verified_source_and_config") is True,
+        "concrete pinned runner": str(deployment.get("runner_dependency", "")).startswith('# { "Depends": "py-genlayer:')
+        and "latest" not in str(deployment.get("runner_dependency", "")) and "test" not in str(deployment.get("runner_dependency", "")),
         "frontend exact address": frontend_address().lower() == address.lower(),
-        "acceptance exact address": str(acceptance.get("contract", "")).lower() == address.lower(),
-        "acceptance exact source": acceptance.get("source_sha256") == deployment.get("source_sha256"),
-        "acceptance passed": acceptance.get("result") == "PASS",
-        "all acceptance steps recorded": required_steps.issubset(transactions)
-        and all(transactions[step].get("checked") is True for step in required_steps),
-        "expected rejections stayed failures": all(
-            transactions[step].get("execution_succeeded") is False for step in rejected_steps
-        ),
-        "positive lifecycle writes executed": all(
-            transactions[step].get("execution_succeeded") is True for step in positive_steps
-        ),
-        "readiness evidence fingerprinted": readiness.get("exists") is True
-        and readiness.get("http_status") == "200"
-        and readiness.get("body_bytes") == "91"
-        and readiness.get("body_digest") == EXPECTED_FIXTURE_DIGEST
-        and readiness.get("provenance") == "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH",
-        "two append-only slot observations": observations.get("total") == "2"
-        and [item.get("slot_index") for item in observation_items] == ["0", "1"],
-        "observation decisions and provenance": len(observation_items) == 2
-        and all(
-            item.get("result") == "PASS"
-            and item.get("http_status") == "200"
-            and item.get("token_present") is True
-            and item.get("body_within_limit") is True
-            and item.get("body_digest") == EXPECTED_FIXTURE_DIGEST
-            and DIGEST_PATTERN.fullmatch(str(item.get("body_digest", ""))) is not None
-            and item.get("provenance") == "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH"
-            for item in observation_items
-        ),
-        "cancelled offer refunded": cancellation.get("status") == "CANCELLED"
-        and cancellation.get("payout_atto") == str(10**15)
-        and transfer_checks.get("cancel-offer", {}).get("value_credited") is True,
-        "monitored bond settled MET": settled.get("status") == "MET"
-        and settled.get("result") == "SLA_MET"
-        and settled.get("observed_count") == "2"
-        and settled.get("uptime_bps") == "10000",
-        "final payout credited": transfer_checks.get("finalize-bond", {}).get("value_credited") is True
-        and transfer_checks.get("finalize-bond", {}).get("value_atto") == str(10**15),
-        "zero fee and no admin": acceptance.get("final_stats", {}).get("fee_bps") == "0"
-        and acceptance.get("final_stats", {}).get("admin_controls") is False,
-        "nothing remains locked": acceptance.get("final_stats", {}).get("total_locked_atto") == "0",
-        "hosting exact address": str(hosting.get("contract_address", "")).lower() == address.lower(),
-        "hosting release is ready": hosting.get("ready_state") == "READY"
-        and hosting.get("target") == "production"
-        and hosting.get("health_verified") is True,
-        "hosted fixture is exact": hosting.get("fixture_status") == 200
-        and hosting.get("fixture_bytes") == 91
-        and hosting.get("fixture_sha256") == EXPECTED_FIXTURE_DIGEST,
+        "acceptance exact source and address": acceptance.get("contract") == address
+        and acceptance.get("source_sha256") == deployment.get("source_sha256"),
+        "acceptance completed": acceptance.get("result") == "PASS",
+        "all writes verified, rejections stayed failures": all(
+            transactions.get(step, {}).get("checked") is True
+            and transactions.get(step, {}).get("execution_succeeded") is (not step.startswith("reject-"))
+            for step in required_steps),
+        "no wallet submitted a successful check": all(
+            not (entry.get("method") == "record_observation" and entry.get("execution_succeeded") is True)
+            for entry in transactions.values()),
+        "no fees, admins, or locked acceptance funds": acceptance.get("final_stats", {}).get("fee_bps") == "0"
+        and acceptance.get("final_stats", {}).get("admin_controls") is False
+        and acceptance.get("final_stats", {}).get("total_locked_atto") == "0",
+        "missing evidence risk belongs to provider": acceptance.get("final_stats", {}).get("missing_evidence_payout") == "BENEFICIARY"
+        and acceptance.get("final_stats", {}).get("sampling_policy") == "AUTONOMOUS_FINALIZED_SELF_CALLS",
+        "hosting points to replacement": hosting.get("contract_address") == address and hosting.get("ready_state") == "READY"
+        and hosting.get("target") == "production" and hosting.get("health_verified") is True,
+        "stable hosted demo fixture": hosting.get("fixture_status") == 200
+        and hosting.get("fixture_bytes") == 91 and hosting.get("fixture_sha256") == EXPECTED_FIXTURE_DIGEST,
     }
+    for case, status, role in (("lifecycle", "MET", "provider"), ("breach", "BREACHED", "beneficiary"), ("variance", "UNVERIFIABLE", "beneficiary")):
+        result = assertions.get(f"{case}-settled", {}).get("observed", {})
+        recipient = acceptance.get("wallets", {}).get(role)
+        transfer = transfer_checks.get(f"payout-{case}", transfer_checks.get(f"timeout-{case}", {}))
+        checks[f"{case}: correct terminal status and recipient"] = result.get("status") == status and result.get("payout_recipient") == recipient
+        checks[f"{case}: whole test bond actually credited"] = result.get("payout_atto") == str(10**15) and transfer.get("value_credited") is True and transfer.get("recipient") == recipient and transfer.get("value_atto") == str(10**15)
+        observations = assertions.get(f"{case}-observations", {}).get("observed", {}).get("items", [])
+        if case != "variance":
+            children = autonomous.get(case, [])
+            checks[f"{case}: two real finalized self-calls"] = len(children) == 2 and all(
+                c.get("sender", "").lower() == address.lower() and c.get("recipient", "").lower() == address.lower()
+                and c.get("status") == "FINALIZED" and c.get("execution_succeeded") is True for c in children)
+            checks[f"{case}: all required observations"] = len(observations) == 2 and [o.get("slot_index") for o in observations] == ["0", "1"]
+            checks[f"{case}: strict independent provenance"] = bool(observations) and all(
+                DIGEST_PATTERN.fullmatch(str(o.get("body_digest", ""))) is not None
+                and o.get("provenance") == "GENLAYER_VALIDATORS_INDEPENDENT_STRICT_FETCH" for o in observations)
+        if case == "lifecycle":
+            checks["healthy fixture evidence unchanged"] = all(o.get("result") == "PASS" and o.get("body_digest") == EXPECTED_FIXTURE_DIGEST for o in observations)
+        elif case == "breach":
+            checks["actual received failure demonstrated"] = any(o.get("result") == "FAIL_STATUS" and o.get("http_status") == "503" for o in observations)
+        else:
+            attempt = acceptance.get("unverifiable_attempts", {}).get(case, {})
+            checks["response variance did not erase the parent obligation"] = attempt.get("child_execution_succeeded") is False and attempt.get("committed_state", {}).get("status") == "ACTIVE" and any(o.get("result") == "PENDING" for o in attempt.get("observations_before_timeout", {}).get("items", []))
+            checks["unverifiable record is not fabricated outage evidence"] = any(o.get("result") == "UNVERIFIABLE_TIMEOUT" and o.get("body_digest") == "" and o.get("observed_at_unix") == "0" for o in observations)
     for label, passed in checks.items():
         print(f"{'PASS' if passed else 'FAIL'}: {label}")
     return all(checks.values()), deployment, hosting
@@ -215,16 +185,28 @@ def verify_live(deployment: dict | None, hosting: dict | None) -> bool:
         health = json.loads(health_body.decode("utf-8"))
         fixture_status, fixture_body, _ = request(base_url + "/api/demo-health")
         page_results = {path: request(base_url + path)[0] for path in ("/", "/bonds?bond=ub-2", "/bonds/new", "/how-it-works", "/status")}
+        acceptance = json.loads(ACCEPTANCE_PATH.read_text(encoding="utf-8"))
+        live_transfers = []
+        for transfer in acceptance.get("transfer_checks", {}).values():
+            time.sleep(2.25)
+            receipt = rpc("eth_getTransactionByHash", [transfer["transaction"]])["result"]
+            live_transfers.append(bool(receipt) and receipt.get("status") == "FINALIZED"
+                                 and receipt.get("value_credited") is True
+                                 and receipt.get("to_address", "").lower() == transfer["recipient"].lower()
+                                 and str(receipt.get("value")) == transfer["value_atto"])
     except (OSError, KeyError, ValueError, json.JSONDecodeError, RuntimeError) as error:
         print(f"FAIL: live verification failed: {error}")
         return False
     headers = {key.lower(): value for key, value in health_headers.items()}
     checks = {
+        "all four native payout credits still verifiable on-chain": len(live_transfers) == 4 and all(live_transfers),
         "on-chain source still exact": live_source_digest == deployment.get("source_sha256"),
         "health endpoint identifies release": health_status == 200
         and health.get("product") == "UptimeBond"
-        and health.get("release") == "0.1.0"
-        and health.get("network") == "StudioNet",
+        and health.get("release") == "0.2.0"
+        and health.get("network") == "StudioNet"
+        and health.get("samplingPolicy") == "AUTONOMOUS_FINALIZED_SELF_CALLS"
+        and health.get("missingEvidencePayout") == "BENEFICIARY",
         "health endpoint exact contract": str(health.get("contractAddress", "")).lower()
         == str(deployment.get("address", "")).lower(),
         "health endpoint release-ready": health.get("readyForStudioNetTesting") is True

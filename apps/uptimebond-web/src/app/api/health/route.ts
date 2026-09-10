@@ -3,7 +3,9 @@ import { CONTRACT_ADDRESS, CONTRACT_READY, NETWORK_NAME } from "@/lib/contract";
 export async function GET() {
   return Response.json({
     product: "UptimeBond",
-    release: "0.1.0",
+    release: "0.2.0",
+    samplingPolicy: "AUTONOMOUS_FINALIZED_SELF_CALLS",
+    missingEvidencePayout: "BENEFICIARY",
     network: NETWORK_NAME,
     contractAddress: CONTRACT_READY ? CONTRACT_ADDRESS : null,
     contractConfigured: CONTRACT_READY,

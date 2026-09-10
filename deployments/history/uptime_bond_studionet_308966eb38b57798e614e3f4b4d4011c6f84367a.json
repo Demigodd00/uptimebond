@@ -1,13 +1,13 @@
 {
   "contract": "UptimeBond",
-  "version": "0.2.0-studionet",
+  "version": "0.1.0-studionet",
   "network": "studionet",
-  "address": "0xF5E1027a28439716455F7b1778Aca17855346B87",
-  "transaction_hash": "0x1ccc572d6441ea304d62e821c1a06f51ad75202f1aadc4d537d1fd6bfb25804f",
+  "address": "0x308966Eb38b57798e614E3f4B4D4011C6F84367a",
+  "transaction_hash": "0x6955a33c29a73aa30a5efb321b116b029f23769c4e6c31310b4a9c07aeb6fd05",
   "deployer": "0x1adf37F016384714F683CaC4d0a261A6d4e27033",
   "deployer_role": "deployment_only_no_admin_controls_or_protocol_fees",
   "constructor_args": [],
-  "source_sha256": "415f9ee2d28da8a99e97b99d5fcde19680a5739a7cb0f41071c5a368e7f7b40f",
+  "source_sha256": "d79ea8561dc7da6a1f2a28906a59b01d7b5022aa3bccb321454884c658753481",
   "runner_dependency": "# { \"Depends\": \"py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6\" }",
   "preflight_skipped": false,
   "receipt_status": "FINALIZED",
@@ -15,15 +15,11 @@
   "verified_source_and_config": true,
   "deployed_stats": {
     "admin_controls": false,
-    "check_timeout_secs": "300",
-    "evidence_risk_bearer": "PROVIDER",
     "experimental": true,
     "fee_bps": "0",
     "max_page_size": "25",
     "max_response_bytes": "16000",
-    "missing_evidence_payout": "BENEFICIARY",
     "probe_policy": "STRICT_INDEPENDENT_STATUS_TOKEN_SIZE_AND_SHA256",
-    "sampling_policy": "AUTONOMOUS_FINALIZED_SELF_CALLS",
     "total_breached": "0",
     "total_created": "0",
     "total_finalized": "0",
@@ -32,8 +28,7 @@
     "total_met": "0",
     "total_paid_to_beneficiaries_atto": "0",
     "total_returned_to_providers_atto": "0",
-    "version": "0.2.0-studionet"
+    "version": "0.1.0-studionet"
   },
-  "deployed_at": "2026-09-10T06:19:07.155377+00:00",
-  "previous_address": "0x308966Eb38b57798e614E3f4B4D4011C6F84367a"
+  "deployed_at": "2026-09-06T17:10:06.926194+00:00"
 }

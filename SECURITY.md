@@ -2,20 +2,39 @@
 
 ## Supported release
 
-The supported StudioNet release is contract `0x308966Eb38b57798e614E3f4B4D4011C6F84367a` with source SHA-256 `d79ea8561dc7da6a1f2a28906a59b01d7b5022aa3bccb321454884c658753481` and the production app at https://uptimebond-psi.vercel.app.
+Version 0.2.0-studionet:
+`0xF5E1027a28439716455F7b1778Aca17855346B87`.
+Source SHA-256:
+`415f9ee2d28da8a99e97b99d5fcde19680a5739a7cb0f41071c5a368e7f7b40f`.
 
-This is a valueless StudioNet demonstration and has not been represented as a mainnet audit, insurance product, legal SLA, or continuous monitoring service.
+This is a valueless StudioNet demonstration, not a mainnet security guarantee,
+insurance product, legal SLA, or continuous monitoring service.
 
-## Report a vulnerability
+## Report an issue
 
-Report security issues privately to the repository owner before public disclosure. Include the affected contract address and version, transaction or bond ID, reproduction steps, expected invariant, and observed result. Do not place credentials, private keys, private endpoint content, or personal data in an issue.
+Contact the repository owner privately with the contract address, transaction
+or bond ID, reproduction steps, and expected/observed behavior. Never publish
+credentials, private keys, or personal endpoint content.
 
 ## Security boundaries
 
-- Use only public, non-sensitive, static UTF-8 HTTPS health endpoints no larger than 16 KB.
-- Never place a signer key, seed phrase, wallet export, or API credential in the repository or frontend environment.
-- Never configure the frontend with an address that differs from the recorded canonical deployment.
-- A finalized transaction is not treated as successful until its execution result is checked.
-- Missing observations become inconclusive; transport errors never fabricate a failed observation.
-- The deployer has no admin settlement role, fee withdrawal, or mechanism to redirect locked value.
-- A keeper or participant must trigger each monitoring slot; the contract does not schedule its own transactions.
+- Only public, non-sensitive, stable UTF-8 HTTPS responses up to 16,000 bytes.
+- Full response equality is strict. Dynamic bodies may prevent consensus.
+- Parent state commits each pending attempt before a child fetch. Unsuccessful
+  child execution cannot erase that obligation. No external check or retry path.
+- Refunds after acceptance require all checks and the agreed failure allowance.
+- Failed/unverifiable evidence cannot increase provider payout: transport failure
+  or an overdue required check pays the beneficiary, including infrastructure faults.
+- Five minutes is a deterministic contract-time deadline, not a promise that
+  network consensus or a native transfer will finalize within five minutes.
+- Timeout settlement needs a transaction. Any wallet can send it. No background
+  keeper or off-chain alarm service is claimed.
+- No accepted bond cancellation, provider withdrawal, admin override, or fee.
+- Finality alone is not execution success. Verify child execution and payout credit.
+- The browser never reports uptime or determines a payout.
+- Endpoint operators may distinguish validator traffic; sampled evidence cannot
+  prove global availability, continuous uptime, content authorship, or legal ownership.
+
+The web release upgrades Next.js to 16.3.3 for
+[GHSA-p293-qw3h-jr36](https://github.com/advisories/GHSA-p293-qw3h-jr36) and
+[GHSA-2xp9-vwfh-vxw4](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4).
